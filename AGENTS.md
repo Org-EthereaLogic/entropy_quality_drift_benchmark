@@ -84,8 +84,9 @@ When principles conflict, resolve them in this order:
 ## Relationship to Other Governance Docs
 
 - `AGENTS.md` defines operational behavior for coding agents.
-- `DIRECTIVES.md` defines enforceable repository rules.
-- `specs/*.md` and `specs/deep_specs/*.md` define the MVP contract and runtime behavior.
+- `CLAUDE.md` defines the standing quick-reference brief for this repository.
+- `README.md` defines the public-facing benchmark contract and operator workflow.
+- `.claude/commands/` and `.claude/agents/` define reusable local command and agent surfaces.
 
 ## Repository-Specific Notes
 

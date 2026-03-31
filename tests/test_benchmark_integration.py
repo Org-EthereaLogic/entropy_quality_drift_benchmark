@@ -1,7 +1,9 @@
 """Integration test: full benchmark run across canonical seeds."""
 
+import json
+
 from entropy_quality_drift.contracts import BenchmarkResult, GateVerdict, TrackScore
-from entropy_quality_drift.metrics.gate_evaluator import evaluate_benchmark
+from entropy_quality_drift.metrics.gate_evaluator import _fail_threshold_met, evaluate_benchmark
 from entropy_quality_drift.runners.benchmark import BenchmarkConfig, run_benchmark
 
 
@@ -151,3 +153,23 @@ class TestFullBenchmarkRun:
 
         files = list(tmp_path.glob("bench_42_*.json"))
         assert len(files) == 2
+
+    def test_fail_threshold_supports_symbolic_comparisons(self):
+        """Fail-threshold comparisons must support symbolic operators without crashing."""
+        assert _fail_threshold_met(0.79, ">=", 0.8)
+        assert not _fail_threshold_met(0.81, ">=", 0.8)
+        assert _fail_threshold_met(1.21, "<=", 1.2)
+        assert not _fail_threshold_met(1.19, "<=", 1.2)
+
+    def test_evidence_bundle_preserves_threshold_map(self, tmp_path):
+        """Evidence should include both pass and fail thresholds when both exist."""
+        config = BenchmarkConfig(seed=42, n_rows=250, evidence_dir=str(tmp_path))
+
+        run_benchmark(config)
+
+        bundle_path = next(tmp_path.glob("bench_42_*.json"))
+        bundle = json.loads(bundle_path.read_text(encoding="utf-8"))
+
+        q_gate_2 = next(g for g in bundle["gates"]["quality"] if g["gate_id"] == "Q-GATE-2")
+        assert q_gate_2["threshold"] == 0.9
+        assert q_gate_2["thresholds"] == {"pass_threshold": 0.9, "fail_threshold": 0.8}

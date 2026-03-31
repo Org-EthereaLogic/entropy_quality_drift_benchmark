@@ -149,6 +149,7 @@ class GateResult:
     status: GateVerdict
     passed: Optional[bool]
     details: str = ""
+    thresholds: Optional[dict[str, float]] = None
 
 
 @dataclass(frozen=True)

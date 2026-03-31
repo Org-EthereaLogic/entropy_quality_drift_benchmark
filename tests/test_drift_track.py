@@ -149,6 +149,31 @@ class TestEntropyDriftAdvantage:
         assert "KL=" in fare_check[0].details
         assert fare_check[0].method == "entropy_gradient+kl_divergence"
 
+    def test_kl_trigger_records_active_threshold(self):
+        """Threshold output should reflect the dominant KL trigger when KL drives the flag."""
+        ref = generate_clean_batch(n_rows=1000, seed=42)
+        drifted = inject_drift(
+            ref,
+            DriftProfile(
+                category_injection_columns=("payment_type",),
+                new_categories=("crypto", "voucher", "gift_card"),
+            ),
+            seed=99,
+        )
+
+        sentinel = EntropySentinel(
+            entropy_change_threshold=10.0,
+            categorical_kl_divergence_threshold=0.05,
+        )
+        sentinel.set_reference(ref)
+        result = sentinel.check_drift(drifted, ref, "kl_trigger")
+
+        payment_check = [c for c in result.checks if c.feature_name == "payment_type"]
+        assert len(payment_check) > 0
+        assert payment_check[0].drifted
+        assert payment_check[0].threshold == 0.05
+        assert "trigger=kl_divergence" in payment_check[0].details
+
     def test_composite_health_score(self):
         """EntropySentinel produces a single batch-level health score."""
         ref = generate_clean_batch(n_rows=500, seed=42)

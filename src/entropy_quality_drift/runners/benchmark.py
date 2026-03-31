@@ -59,6 +59,12 @@ class BenchmarkConfig:
 def run_benchmark(config: Optional[BenchmarkConfig] = None) -> BenchmarkResult:
     """Execute the full dual-track benchmark."""
     cfg = config or BenchmarkConfig()
+    final, _ = _execute_benchmark(cfg)
+    return final
+
+
+def _execute_benchmark(cfg: BenchmarkConfig):
+    """Run the benchmark once and return both the result and evaluated gates."""
 
     run_id = f"bench_{cfg.seed}"
 
@@ -165,7 +171,7 @@ def run_benchmark(config: Optional[BenchmarkConfig] = None) -> BenchmarkResult:
     # 6. Write evidence bundle
     write_evidence_bundle(final, gate_result, cfg)
 
-    return final
+    return final, gate_result
 
 
 def _build_quality_ground_truth(profile: FaultProfile) -> set[str]:
@@ -377,14 +383,13 @@ def main(argv: Optional[list[str]] = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    result = run_benchmark(
+    result, gate_result = _execute_benchmark(
         BenchmarkConfig(
             seed=args.seed,
             n_rows=args.rows,
             evidence_dir=args.evidence_dir,
         )
     )
-    gate_result = evaluate_benchmark(result)
     print(
         json.dumps(
             {
@@ -415,6 +420,8 @@ def main(argv: Optional[list[str]] = None) -> int:
                     "quality": [
                         {
                             "gate_id": gate.gate_id,
+                            "threshold": gate.threshold,
+                            "thresholds": gate.thresholds,
                             "status": gate.status.value,
                             "details": gate.details,
                         }
@@ -423,6 +430,8 @@ def main(argv: Optional[list[str]] = None) -> int:
                     "drift": [
                         {
                             "gate_id": gate.gate_id,
+                            "threshold": gate.threshold,
+                            "thresholds": gate.thresholds,
                             "status": gate.status.value,
                             "details": gate.details,
                         }

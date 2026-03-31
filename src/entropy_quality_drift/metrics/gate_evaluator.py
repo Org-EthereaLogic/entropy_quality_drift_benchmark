@@ -94,6 +94,7 @@ def _evaluate_track_gates(
                 status=GateVerdict.INCOMPLETE,
                 passed=None,
                 details="NOT_MEASURED",
+                thresholds=_thresholds_for_display(spec),
             )
             for gate_id, spec in track_config.items()
         ]
@@ -121,6 +122,7 @@ def _evaluate_gate(
             status=GateVerdict.INCOMPLETE,
             passed=None,
             details="METRIC_UNAVAILABLE",
+            thresholds=_thresholds_for_display(spec),
         )
 
     if "pass_condition" in spec:
@@ -153,6 +155,7 @@ def _evaluate_gate(
         status=status,
         passed=_passed_from_status(status),
         details=_details_for_gate(gate_id, spec, baseline_value, challenger_value, status),
+        thresholds=_thresholds_for_display(spec),
     )
 
 
@@ -218,10 +221,18 @@ def _relative_condition_met(value: float, baseline_value: float, condition: str)
 def _comparison_met(value: float, comparison: str, threshold: float) -> bool:
     if comparison == "gte":
         return value >= threshold
+    if comparison == "gt":
+        return value > threshold
     if comparison == "lte":
         return value <= threshold
+    if comparison == "lt":
+        return value < threshold
     if comparison == "eq":
         return value == threshold
+    if comparison == "==":
+        return value == threshold
+    if comparison == "!=":
+        return value != threshold
     if comparison == ">=":
         return value >= threshold
     if comparison == "<=":
@@ -236,10 +247,17 @@ def _comparison_met(value: float, comparison: str, threshold: float) -> bool:
 def _fail_threshold_met(value: float, comparison: str, fail_threshold: float) -> bool:
     inverse = {
         "gte": "<",
+        "gt": "<=",
         "lte": ">",
+        "lt": ">=",
         "eq": "!=",
+        ">=": "<",
+        ">": "<=",
+        "<=": ">",
+        "<": ">=",
+        "==": "!=",
     }
-    if comparison == "eq":
+    if comparison in {"eq", "=="}:
         return value != fail_threshold
     return _comparison_met(value, inverse[comparison], fail_threshold)
 
@@ -253,7 +271,20 @@ def _passed_from_status(status: GateVerdict) -> bool | None:
 
 
 def _threshold_for_display(spec: dict) -> float | None:
-    return spec.get("pass_threshold") or spec.get("warn_threshold")
+    if "pass_threshold" in spec:
+        return spec["pass_threshold"]
+    if "warn_threshold" in spec:
+        return spec["warn_threshold"]
+    return None
+
+
+def _thresholds_for_display(spec: dict) -> dict[str, float] | None:
+    thresholds = {
+        key: spec[key]
+        for key in ("pass_threshold", "fail_threshold", "warn_threshold")
+        if key in spec
+    }
+    return thresholds or None
 
 
 def _details_for_gate(

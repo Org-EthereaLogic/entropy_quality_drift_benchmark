@@ -210,7 +210,7 @@ contract instead of hardcoding divergent thresholds.
 ## Automation
 
 - **CI matrix:** Python `3.10`, `3.11`, and `3.12`
-- **Lint gate:** `ruff check src/ tests/`
+- **Lint gate:** `ruff check src tests`
 - **Test gate:** `pytest tests/ -v --tb=short --cov=src --cov-report=xml:coverage.xml`
 - **Coverage upload:** Codecov and Codacy uploads on pushes to `main`
 - **Security scan:** Snyk code scanning on pushes to `main`

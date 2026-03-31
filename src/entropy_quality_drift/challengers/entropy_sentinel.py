@@ -259,6 +259,7 @@ class EntropySentinel(BaseDriftAdapter):
             entropy_change = 0.0  # Both constant
 
         entropy_drifted = entropy_change > self.entropy_change_threshold
+        entropy_signal = entropy_change / max(self.entropy_change_threshold, 1e-10)
 
         # Signal 2: KL divergence
         kl_threshold = (
@@ -268,25 +269,38 @@ class EntropySentinel(BaseDriftAdapter):
         )
         kl_div = _kl_divergence(ref_col, cur_col)
         kl_drifted = kl_div > kl_threshold
+        kl_signal = kl_div / max(kl_threshold, 1e-10)
 
         # Combined decision: either signal triggers drift flag
         drifted = entropy_drifted or kl_drifted
 
-        # Composite score: max of normalized signals (0 = no drift, 1 = max drift)
-        score = max(
-            entropy_change / max(self.entropy_change_threshold, 1e-10),
-            kl_div / max(kl_threshold, 1e-10),
+        if entropy_drifted and kl_drifted:
+            trigger = "both"
+        elif entropy_drifted:
+            trigger = "entropy_gradient"
+        elif kl_drifted:
+            trigger = "kl_divergence"
+        else:
+            trigger = "entropy_gradient" if entropy_signal >= kl_signal else "kl_divergence"
+
+        active_threshold = (
+            self.entropy_change_threshold
+            if entropy_signal >= kl_signal
+            else kl_threshold
         )
-        score = min(score, 1.0)
+
+        # Composite score: max of normalized signals (0 = no drift, 1 = max drift)
+        score = min(max(entropy_signal, kl_signal), 1.0)
 
         return DriftCheckResult(
             feature_name=col_name,
             drifted=drifted,
             score=score,
-            threshold=self.entropy_change_threshold,
+            threshold=active_threshold,
             method="entropy_gradient+kl_divergence",
             details=(
                 f"H_ref={h_ref:.4f}, H_cur={h_cur:.4f}, ΔH={entropy_change:.4f}, "
-                f"KL={kl_div:.4f}, KL_thr={kl_threshold:.4f}"
+                f"KL={kl_div:.4f}, KL_thr={kl_threshold:.4f}, trigger={trigger}, "
+                f"active_thr={active_threshold:.4f}"
             ),
         )
