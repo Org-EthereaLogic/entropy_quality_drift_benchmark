@@ -9,6 +9,16 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Added
+
+- Problem-first README framing: leads with the business problem (silent distribution degradation and gradual drift) rather than benchmark mechanics.
+- Dedicated "Understanding the WARN Verdict" section explaining the per-run verdict model for external readers, including `INCOMPLETE` handling.
+- Sample evidence output section in README showing an abbreviated evidence bundle with threshold context.
+- Databricks-facing walkthrough (`docs/databricks_walkthrough.md`) mapping benchmark concepts to Delta Lake pipelines, Unity Catalog gates, and Lakehouse Monitoring.
+- "How This Maps to Databricks" summary table in README linking to the full walkthrough.
+- Three publication-ready visualizations (`docs/generate_visuals.py`): track comparison, gate evaluation matrix, and verdict dashboard, matching the dark-theme palette from the medallion demo.
+- `[docs]` optional dependency for matplotlib-based image generation.
+
 ### Fixed
 
 - Made gate evaluation configuration-driven from `configs/kpi_thresholds.json`, including correct PASS/WARN/FAIL handling for hard-gate warning bands.
@@ -16,6 +26,9 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - Made benchmark evidence bundle naming append-only in practice by using timestamped unique filenames.
 - Reduced benchmark latency flakiness by measuring median latency over repeated executions.
 - Fixed editable installs for the published package by declaring the Hatch wheel package path.
+- Evidence bundles now include full `thresholds` map per gate for self-contained verdict reconstruction.
+- Corrected the README's verified local test count to match the current suite (`26 passed`).
+- Aligned `configs/kpi_thresholds.json` decision-rule wording with the evaluator's per-run verdict semantics.
 
 ### Changed
 
@@ -23,6 +36,7 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - Added CLI-ready benchmark execution and updated governance/docs surfaces to match current runtime behavior.
 - Updated GitHub Actions automation to publish coverage, run Snyk code scans on `main`, and pin third-party actions to immutable commit SHAs.
 - Ported the prior experiment command and agent surfaces into `.claude/commands/` and `.claude/agents/`.
+- README restructured for client-readability: problem statement, architecture, verdict explanation, evidence sample, Databricks mapping, then technical detail.
 
 ## [0.1.0] — 2026-03-30
 

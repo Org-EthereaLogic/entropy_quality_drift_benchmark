@@ -29,7 +29,7 @@ evidence produced by the current harness.
 
 ```bash
 pip install -e ".[dev]"
-ruff check src tests
+ruff check src tests docs
 pytest tests/ -v --tb=short
 python -m entropy_quality_drift.runners.benchmark --seed 42 --rows 1000
 ```
@@ -55,6 +55,7 @@ python -m entropy_quality_drift.runners.benchmark --seed 42 --rows 1000
 | `src/entropy_quality_drift/runners/` | Benchmark orchestration and CLI entry point |
 | `src/entropy_quality_drift/evidence/` | Append-only evidence bundle writing |
 | `src/entropy_quality_drift/databricks_seams/` | Conceptual Databricks seam stubs |
+| `docs/` | Databricks walkthrough and supplementary documentation |
 | `.github/workflows/` | CI, coverage, and security automation |
 | `.claude/commands/` | Claude command definitions |
 | `.claude/agents/` | Claude agent briefs |
@@ -63,7 +64,7 @@ python -m entropy_quality_drift.runners.benchmark --seed 42 --rows 1000
 
 The repository should remain green against:
 
-- `ruff check src tests`
+- `ruff check src tests docs`
 - `pytest tests/ -v --tb=short`
 
 The benchmark itself currently targets a `WARN` local verdict on the default

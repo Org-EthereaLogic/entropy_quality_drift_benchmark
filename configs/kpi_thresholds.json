@@ -75,8 +75,9 @@
     "append_only_evidence": true
   },
   "decision_rule": {
-    "pass": "All FAIL gates pass and no WARN gate breaches across two consecutive runs.",
-    "warn": "All FAIL gates pass but one or more WARN gates breach.",
-    "fail": "Any FAIL gate breach."
+    "pass": "Per-run verdict: all hard gates pass and no warning gates breach.",
+    "warn": "Per-run verdict: all hard gates pass but one or more warning gates breach.",
+    "fail": "Per-run verdict: at least one hard gate breaches.",
+    "incomplete": "Per-run verdict: one or more required metrics are unavailable, so one or more gates cannot be fully evaluated."
   }
 }

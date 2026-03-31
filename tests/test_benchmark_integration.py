@@ -72,6 +72,15 @@ class TestFullBenchmarkRun:
         }
         assert expected == all_gate_ids, f"Missing gates: {expected - all_gate_ids}"
 
+    def test_missing_metrics_yield_incomplete_verdict(self):
+        """Missing track outputs should produce an explicit INCOMPLETE verdict."""
+        result = BenchmarkResult(run_id="incomplete", seed=42)
+        gate_result = evaluate_benchmark(result)
+
+        assert gate_result.overall_verdict is GateVerdict.INCOMPLETE
+        assert all(g.status is GateVerdict.INCOMPLETE for g in gate_result.quality_gates)
+        assert all(g.status is GateVerdict.INCOMPLETE for g in gate_result.drift_gates)
+
     def test_deterministic_across_canonical_seeds(self):
         """Same seed must produce identical verdicts."""
         r1 = run_benchmark(BenchmarkConfig(seed=42, n_rows=500))
