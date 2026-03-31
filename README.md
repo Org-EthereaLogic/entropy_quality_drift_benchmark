@@ -1,5 +1,7 @@
 # Entropy Quality & Drift Benchmark
 
+[![Codacy Badge](https://api.codacy.com/project/badge/Grade/a221857e497742c9a6184c21b915f166)](https://app.codacy.com/gh/Org-EthereaLogic/entropy_quality_drift_benchmark?utm_source=github.com&utm_medium=referral&utm_content=Org-EthereaLogic/entropy_quality_drift_benchmark&utm_campaign=Badge_Grade)
+
 ### Proving Shannon Entropy-Based Methods Are Competitive Against Industry Baselines for Databricks Medallion Architectures
 
 **Built by [Anthony Johnson](https://www.linkedin.com/in/anthonyjohnsonii/) | EthereaLogic LLC**
