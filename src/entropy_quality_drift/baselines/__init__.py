@@ -14,8 +14,8 @@ from typing import Any
 import pandas as pd
 
 from entropy_quality_drift.contracts import (
-    QualityBatchResult,
     DriftBatchResult,
+    QualityBatchResult,
 )
 
 

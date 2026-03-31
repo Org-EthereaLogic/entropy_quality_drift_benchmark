@@ -1,15 +1,4 @@
-"""
-Quality track tests: EntropyForge vs Deequ baseline.
-
-Verifies that EntropyForge catches everything Deequ catches
-PLUS distribution-level anomalies that rules miss.
-
-Author: Anthony Johnson | EthereaLogic LLC
-"""
-
-import pytest
-import pandas as pd
-import numpy as np
+"""Quality track tests: EntropyForge vs Deequ baseline."""
 
 from entropy_quality_drift.baselines.deequ_adapter import DeequAdapter
 from entropy_quality_drift.challengers.entropy_forge import EntropyForge
@@ -34,10 +23,14 @@ class TestStructuralParity:
 
     def test_null_injection_both_detect(self):
         df = generate_clean_batch(n_rows=500, seed=42)
-        faulted = inject_quality_faults(df, FaultProfile(
-            null_injection_rate=0.20,
-            null_columns=("fare_amount",),
-        ), seed=42)
+        faulted = inject_quality_faults(
+            df,
+            FaultProfile(
+                null_injection_rate=0.20,
+                null_columns=("fare_amount",),
+            ),
+            seed=42,
+        )
 
         deequ = DeequAdapter().validate_batch(faulted, TAXI_CONTRACT, "nulls")
         forge = EntropyForge().validate_batch(faulted, TAXI_CONTRACT, "nulls")
@@ -50,10 +43,14 @@ class TestStructuralParity:
 
     def test_range_violation_both_detect(self):
         df = generate_clean_batch(n_rows=500, seed=42)
-        faulted = inject_quality_faults(df, FaultProfile(
-            range_violation_rate=0.15,
-            range_violation_columns=("trip_distance",),
-        ), seed=42)
+        faulted = inject_quality_faults(
+            df,
+            FaultProfile(
+                range_violation_rate=0.15,
+                range_violation_columns=("trip_distance",),
+            ),
+            seed=42,
+        )
 
         deequ = DeequAdapter().validate_batch(faulted, TAXI_CONTRACT, "range")
         forge = EntropyForge().validate_batch(faulted, TAXI_CONTRACT, "range")
@@ -75,23 +72,27 @@ class TestEntropyAdvantage:
         detects the entropy collapse.
         """
         df = generate_clean_batch(n_rows=500, seed=42)
-        faulted = inject_quality_faults(df, FaultProfile(
-            constant_collapse_columns=("payment_type",),
-            constant_collapse_value="credit",
-        ), seed=42)
+        faulted = inject_quality_faults(
+            df,
+            FaultProfile(
+                constant_collapse_columns=("payment_type",),
+                constant_collapse_value="credit",
+            ),
+            seed=42,
+        )
 
         deequ = DeequAdapter().validate_batch(faulted, TAXI_CONTRACT, "collapse")
         forge = EntropyForge().validate_batch(faulted, TAXI_CONTRACT, "collapse")
 
         # Deequ should PASS — no structural violations
         deequ_payment_fails = [
-            c for c in deequ.checks
-            if "payment_type" in c.check_name and c.status == "FAIL"
+            c for c in deequ.checks if "payment_type" in c.check_name and c.status == "FAIL"
         ]
 
         # EntropyForge should FAIL — detects entropy collapse or constant column
         forge_entropy_fails = [
-            c for c in forge.checks
+            c
+            for c in forge.checks
             if ("entropy" in c.check_name or "constant" in c.check_name)
             and "payment_type" in c.check_name
             and c.status == "FAIL"
@@ -103,19 +104,25 @@ class TestEntropyAdvantage:
     def test_schema_drop_both_detect(self):
         """When a column is dropped, both adapters should FAIL the schema check."""
         df = generate_clean_batch(n_rows=500, seed=42)
-        faulted = inject_quality_faults(df, FaultProfile(
-            schema_drop_columns=("dropoff_zone",),
-        ), seed=42)
+        faulted = inject_quality_faults(
+            df,
+            FaultProfile(
+                schema_drop_columns=("dropoff_zone",),
+            ),
+            seed=42,
+        )
 
         deequ = DeequAdapter().validate_batch(faulted, TAXI_CONTRACT, "drop")
         forge = EntropyForge().validate_batch(faulted, TAXI_CONTRACT, "drop")
 
         deequ_schema_fails = [
-            c for c in deequ.checks
+            c
+            for c in deequ.checks
             if "schema" in c.check_name and "dropoff_zone" in c.check_name and c.status == "FAIL"
         ]
         forge_schema_fails = [
-            c for c in forge.checks
+            c
+            for c in forge.checks
             if "schema" in c.check_name and "dropoff_zone" in c.check_name and c.status == "FAIL"
         ]
 

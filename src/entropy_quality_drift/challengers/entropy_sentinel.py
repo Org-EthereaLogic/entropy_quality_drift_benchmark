@@ -79,18 +79,16 @@ def _kl_divergence(ref_series: pd.Series, cur_series: pd.Series) -> float:
     Uses smoothed probability distributions to avoid division by zero.
     Higher values indicate greater distribution divergence.
     """
-    all_values = sorted(
-        set(ref_series.fillna("__NULL__").astype(str))
-        | set(cur_series.fillna("__NULL__").astype(str))
-    )
-    n_ref = len(ref_series)
-    n_cur = len(cur_series)
+    ref_values, cur_values = _prepare_comparable_series(ref_series, cur_series)
+    all_values = sorted(set(ref_values) | set(cur_values))
+    n_ref = len(ref_values)
+    n_cur = len(cur_values)
 
     if n_ref == 0 or n_cur == 0:
         return 0.0
 
-    ref_counts = ref_series.fillna("__NULL__").astype(str).value_counts()
-    cur_counts = cur_series.fillna("__NULL__").astype(str).value_counts()
+    ref_counts = ref_values.value_counts()
+    cur_counts = cur_values.value_counts()
 
     # Laplace smoothing
     alpha = 1e-10
@@ -104,8 +102,37 @@ def _kl_divergence(ref_series: pd.Series, cur_series: pd.Series) -> float:
     return round(max(0.0, kl), 6)
 
 
-def _is_feature_column(ref_col: pd.Series, cur_col: pd.Series,
-                        uniqueness_ceiling: float = 0.95) -> bool:
+def _prepare_comparable_series(
+    ref_series: pd.Series, cur_series: pd.Series, n_bins: int = 20
+) -> tuple[pd.Series, pd.Series]:
+    """Return string series with shared bins for comparable distributions."""
+    if pd.api.types.is_numeric_dtype(ref_series) and pd.api.types.is_numeric_dtype(cur_series):
+        combined = pd.concat([ref_series, cur_series], ignore_index=True)
+        numeric = combined.dropna()
+        if numeric.nunique() > n_bins:
+            try:
+                categories = pd.qcut(numeric, q=n_bins, duplicates="drop").astype(str)
+                encoded = pd.Series("__NULL__", index=combined.index, dtype="object")
+                encoded.loc[numeric.index] = categories.to_numpy()
+                split = len(ref_series)
+                return (
+                    encoded.iloc[:split].reset_index(drop=True),
+                    encoded.iloc[split:].reset_index(drop=True),
+                )
+            except (ValueError, TypeError):
+                pass
+
+    return (
+        ref_series.fillna("__NULL__").astype(str).reset_index(drop=True),
+        cur_series.fillna("__NULL__").astype(str).reset_index(drop=True),
+    )
+
+
+def _is_feature_column(
+    ref_col: pd.Series,
+    cur_col: pd.Series,
+    uniqueness_ceiling: float = 0.95,
+) -> bool:
     """Determine whether a column is a meaningful feature for drift detection.
 
     Columns that are identifiers (near-100% unique values) or datetime
@@ -138,12 +165,18 @@ class EntropySentinel(BaseDriftAdapter):
     def __init__(
         self,
         entropy_change_threshold: float = 0.35,
-        kl_divergence_threshold: float = 0.80,
+        kl_divergence_threshold: Optional[float] = None,
+        numeric_kl_divergence_threshold: float = 0.50,
+        categorical_kl_divergence_threshold: float = 1.00,
         skip_high_uniqueness: bool = True,
         uniqueness_ceiling: float = 0.95,
     ):
         self.entropy_change_threshold = entropy_change_threshold
-        self.kl_divergence_threshold = kl_divergence_threshold
+        if kl_divergence_threshold is not None:
+            numeric_kl_divergence_threshold = kl_divergence_threshold
+            categorical_kl_divergence_threshold = kl_divergence_threshold
+        self.numeric_kl_divergence_threshold = numeric_kl_divergence_threshold
+        self.categorical_kl_divergence_threshold = categorical_kl_divergence_threshold
         self.skip_high_uniqueness = skip_high_uniqueness
         self.uniqueness_ceiling = uniqueness_ceiling
         self._reference: Optional[pd.DataFrame] = None
@@ -228,8 +261,13 @@ class EntropySentinel(BaseDriftAdapter):
         entropy_drifted = entropy_change > self.entropy_change_threshold
 
         # Signal 2: KL divergence
+        kl_threshold = (
+            self.numeric_kl_divergence_threshold
+            if pd.api.types.is_numeric_dtype(ref_col) and pd.api.types.is_numeric_dtype(cur_col)
+            else self.categorical_kl_divergence_threshold
+        )
         kl_div = _kl_divergence(ref_col, cur_col)
-        kl_drifted = kl_div > self.kl_divergence_threshold
+        kl_drifted = kl_div > kl_threshold
 
         # Combined decision: either signal triggers drift flag
         drifted = entropy_drifted or kl_drifted
@@ -237,7 +275,7 @@ class EntropySentinel(BaseDriftAdapter):
         # Composite score: max of normalized signals (0 = no drift, 1 = max drift)
         score = max(
             entropy_change / max(self.entropy_change_threshold, 1e-10),
-            kl_div / max(self.kl_divergence_threshold, 1e-10),
+            kl_div / max(kl_threshold, 1e-10),
         )
         score = min(score, 1.0)
 
@@ -248,7 +286,7 @@ class EntropySentinel(BaseDriftAdapter):
             threshold=self.entropy_change_threshold,
             method="entropy_gradient+kl_divergence",
             details=(
-                f"H_ref={h_ref:.4f}, H_cur={h_cur:.4f}, "
-                f"ΔH={entropy_change:.4f}, KL={kl_div:.4f}"
+                f"H_ref={h_ref:.4f}, H_cur={h_cur:.4f}, ΔH={entropy_change:.4f}, "
+                f"KL={kl_div:.4f}, KL_thr={kl_threshold:.4f}"
             ),
         )

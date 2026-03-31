@@ -118,12 +118,14 @@ class EntropyForge(BaseQualityAdapter):
         results = []
         for col_spec in contract.columns:
             present = col_spec.name in batch.columns
-            results.append(QualityCheckResult(
-                check_name=f"schema.column_present.{col_spec.name}",
-                status="PASS" if present else "FAIL",
-                observed_value=1.0 if present else 0.0,
-                threshold=1.0,
-            ))
+            results.append(
+                QualityCheckResult(
+                    check_name=f"schema.column_present.{col_spec.name}",
+                    status="PASS" if present else "FAIL",
+                    observed_value=1.0 if present else 0.0,
+                    threshold=1.0,
+                )
+            )
         return results
 
     def _check_volume(
@@ -132,12 +134,14 @@ class EntropyForge(BaseQualityAdapter):
         row_count = len(batch)
         low, high = contract.volume.expected_rows_per_batch
         status = "PASS" if low <= row_count <= high else "FAIL"
-        return [QualityCheckResult(
-            check_name="volume.row_count",
-            status=status,
-            observed_value=float(row_count),
-            threshold=float(high),
-        )]
+        return [
+            QualityCheckResult(
+                check_name="volume.row_count",
+                status=status,
+                observed_value=float(row_count),
+                threshold=float(high),
+            )
+        ]
 
     def _check_null_rates(
         self, batch: pd.DataFrame, contract: SourceContract
@@ -148,20 +152,24 @@ class EntropyForge(BaseQualityAdapter):
                 continue
             if col_spec.nullable:
                 null_rate = float(batch[col_spec.name].isna().mean())
-                results.append(QualityCheckResult(
-                    check_name=f"null_rate.{col_spec.name}",
-                    status="PASS" if null_rate <= contract.volume.max_null_rate else "FAIL",
-                    observed_value=null_rate,
-                    threshold=contract.volume.max_null_rate,
-                ))
+                results.append(
+                    QualityCheckResult(
+                        check_name=f"null_rate.{col_spec.name}",
+                        status="PASS" if null_rate <= contract.volume.max_null_rate else "FAIL",
+                        observed_value=null_rate,
+                        threshold=contract.volume.max_null_rate,
+                    )
+                )
             else:
                 null_count = int(batch[col_spec.name].isna().sum())
-                results.append(QualityCheckResult(
-                    check_name=f"not_null.{col_spec.name}",
-                    status="PASS" if null_count == 0 else "FAIL",
-                    observed_value=float(null_count),
-                    threshold=0.0,
-                ))
+                results.append(
+                    QualityCheckResult(
+                        check_name=f"not_null.{col_spec.name}",
+                        status="PASS" if null_count == 0 else "FAIL",
+                        observed_value=float(null_count),
+                        threshold=0.0,
+                    )
+                )
         return results
 
     def _check_ranges(
@@ -176,12 +184,14 @@ class EntropyForge(BaseQualityAdapter):
                 continue
             low, high = col_spec.valid_range
             out_of_range = int(((col < low) | (col > high)).sum())
-            results.append(QualityCheckResult(
-                check_name=f"range.{col_spec.name}",
-                status="PASS" if out_of_range == 0 else "FAIL",
-                observed_value=out_of_range / len(col),
-                threshold=0.0,
-            ))
+            results.append(
+                QualityCheckResult(
+                    check_name=f"range.{col_spec.name}",
+                    status="PASS" if out_of_range == 0 else "FAIL",
+                    observed_value=out_of_range / len(col),
+                    threshold=0.0,
+                )
+            )
         return results
 
     # --- Entropy-based checks (the differentiator) ---
@@ -209,13 +219,15 @@ class EntropyForge(BaseQualityAdapter):
             h_norm = _normalized_entropy(batch[col_spec.name])
             collapsed = h_norm < self.entropy_collapse_threshold
 
-            results.append(QualityCheckResult(
-                check_name=f"entropy.collapse.{col_spec.name}",
-                status="FAIL" if collapsed else "PASS",
-                observed_value=h_norm,
-                threshold=self.entropy_collapse_threshold,
-                details=f"H_norm={h_norm:.4f}, threshold={self.entropy_collapse_threshold}",
-            ))
+            results.append(
+                QualityCheckResult(
+                    check_name=f"entropy.collapse.{col_spec.name}",
+                    status="FAIL" if collapsed else "PASS",
+                    observed_value=h_norm,
+                    threshold=self.entropy_collapse_threshold,
+                    details=f"H_norm={h_norm:.4f}, threshold={self.entropy_collapse_threshold}",
+                )
+            )
         return results
 
     def _check_cardinality_anomalies(
@@ -241,13 +253,15 @@ class EntropyForge(BaseQualityAdapter):
                 # Expected high cardinality — check for unexpected low uniqueness
                 unique_ratio = n_distinct / n_rows if n_rows > 0 else 0
                 if unique_ratio < 0.5 and h_norm < 0.5:
-                    results.append(QualityCheckResult(
-                        check_name=f"entropy.cardinality_low.{col_spec.name}",
-                        status="WARN",
-                        observed_value=unique_ratio,
-                        threshold=0.5,
-                        details=f"Expected high cardinality, got {n_distinct}/{n_rows}",
-                    ))
+                    results.append(
+                        QualityCheckResult(
+                            check_name=f"entropy.cardinality_low.{col_spec.name}",
+                            status="WARN",
+                            observed_value=unique_ratio,
+                            threshold=0.5,
+                            details=f"Expected high cardinality, got {n_distinct}/{n_rows}",
+                        )
+                    )
 
         return results
 
@@ -264,11 +278,16 @@ class EntropyForge(BaseQualityAdapter):
                 continue
             h = _column_entropy(batch[col_spec.name])
             if h == 0.0 and len(batch) > 1:
-                results.append(QualityCheckResult(
-                    check_name=f"entropy.constant.{col_spec.name}",
-                    status="FAIL",
-                    observed_value=0.0,
-                    threshold=0.0,
-                    details=f"Column has zero entropy (constant value) across {len(batch)} rows",
-                ))
+                results.append(
+                    QualityCheckResult(
+                        check_name=f"entropy.constant.{col_spec.name}",
+                        status="FAIL",
+                        observed_value=0.0,
+                        threshold=0.0,
+                        details=(
+                            "Column has zero entropy "
+                            f"(constant value) across {len(batch)} rows"
+                        ),
+                    )
+                )
         return results

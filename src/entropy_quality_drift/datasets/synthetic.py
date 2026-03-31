@@ -12,13 +12,11 @@ Author: Anthony Johnson | EthereaLogic LLC
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
 
 import numpy as np
 import pandas as pd
 
 from entropy_quality_drift.contracts import ColumnSpec, SourceContract, VolumeSpec
-
 
 # --- Source contract for the benchmark dataset ---
 
@@ -28,7 +26,12 @@ TAXI_CONTRACT = SourceContract(
         ColumnSpec(name="trip_id", dtype="string", nullable=False),
         ColumnSpec(name="pickup_datetime", dtype="datetime64", nullable=False),
         ColumnSpec(name="dropoff_datetime", dtype="datetime64", nullable=False),
-        ColumnSpec(name="trip_distance", dtype="float64", nullable=False, valid_range=(0.01, 200.0)),
+        ColumnSpec(
+            name="trip_distance",
+            dtype="float64",
+            nullable=False,
+            valid_range=(0.01, 200.0),
+        ),
         ColumnSpec(name="fare_amount", dtype="float64", nullable=False, valid_range=(0.01, 500.0)),
         ColumnSpec(name="pickup_zone", dtype="string", nullable=True),
         ColumnSpec(name="dropoff_zone", dtype="string", nullable=True),
@@ -165,14 +168,31 @@ def inject_drift(
             std = result[col].std()
             shift = profile.shift_magnitude * std * 2
             mask = rng.random(n) < profile.shift_magnitude
-            result.loc[mask, col] = result.loc[mask, col] + shift
+            if profile.gradual:
+                mask_indices = result.index[mask]
+                if len(mask_indices) > 0:
+                    gradient = np.linspace(0.2, 1.0, len(mask_indices))
+                    rng.shuffle(gradient)
+                    result.loc[mask_indices, col] = (
+                        result.loc[mask_indices, col].to_numpy() + shift * gradient
+                    )
+            else:
+                result.loc[mask, col] = result.loc[mask, col] + shift
         else:
             # Collapse categorical to fewer values
             unique_vals = result[col].dropna().unique()
             if len(unique_vals) > 1:
                 dominant = unique_vals[0]
                 mask = rng.random(n) < profile.shift_magnitude
-                result.loc[mask, col] = dominant
+                if profile.gradual:
+                    mask_indices = result.index[mask]
+                    if len(mask_indices) > 0:
+                        gradient = np.linspace(0.2, 1.0, len(mask_indices))
+                        threshold = rng.random(len(mask_indices))
+                        chosen = mask_indices[threshold < gradient]
+                        result.loc[chosen, col] = dominant
+                else:
+                    result.loc[mask, col] = dominant
 
     # New category injection
     for col in profile.category_injection_columns:

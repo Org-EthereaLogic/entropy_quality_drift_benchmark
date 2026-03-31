@@ -14,11 +14,10 @@ Author: Anthony Johnson | EthereaLogic LLC
 
 from __future__ import annotations
 
+import argparse
 import json
-import os
-import time
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from statistics import median
 from typing import Optional
 
 from entropy_quality_drift.baselines.deequ_adapter import DeequAdapter
@@ -40,7 +39,6 @@ from entropy_quality_drift.datasets.synthetic import (
 from entropy_quality_drift.evidence import write_evidence_bundle
 from entropy_quality_drift.metrics.gate_evaluator import evaluate_benchmark
 
-
 # Columns that are meaningful features for quality/drift evaluation.
 # Excludes primary keys (trip_id) and timestamps (pickup/dropoff_datetime)
 # which are identifiers, not distributional features.
@@ -53,7 +51,9 @@ class BenchmarkConfig:
     n_rows: int = 1000
     quality_fault_profile: Optional[FaultProfile] = None
     drift_profile: Optional[DriftProfile] = None
+    gradual_drift_profile: Optional[DriftProfile] = None
     evidence_dir: str = "runs"
+    latency_repetitions: int = 3
 
 
 def run_benchmark(config: Optional[BenchmarkConfig] = None) -> BenchmarkResult:
@@ -83,14 +83,27 @@ def run_benchmark(config: Optional[BenchmarkConfig] = None) -> BenchmarkResult:
         new_categories=("crypto", "voucher"),
     )
     drifted_df = inject_drift(clean_df, drift_profile, seed=cfg.seed + 1)
+    gradual_profile = cfg.gradual_drift_profile or DriftProfile(
+        distribution_shift_columns=("fare_amount", "trip_distance"),
+        shift_magnitude=0.3,
+        gradual=True,
+    )
+    gradual_drifted_df = inject_drift(clean_df, gradual_profile, seed=cfg.seed + 2)
 
     # Build ground truth sets for scoring
     quality_ground_truth = _build_quality_ground_truth(fault_profile)
+    quality_distribution_ground_truth = set(fault_profile.constant_collapse_columns)
     drift_ground_truth = _build_drift_ground_truth(drift_profile)
+    gradual_drift_ground_truth = _build_drift_ground_truth(gradual_profile)
 
     # 2. Run quality track
     quality_baseline_score = _run_quality_adapter(
-        DeequAdapter(), faulted_df, "quality_baseline", quality_ground_truth
+        DeequAdapter(),
+        faulted_df,
+        "quality_baseline",
+        quality_ground_truth,
+        quality_distribution_ground_truth,
+        cfg.latency_repetitions,
     )
     quality_challenger_score = _run_quality_adapter(
         EntropyForge(
@@ -100,14 +113,30 @@ def run_benchmark(config: Optional[BenchmarkConfig] = None) -> BenchmarkResult:
         faulted_df,
         "quality_challenger",
         quality_ground_truth,
+        quality_distribution_ground_truth,
+        cfg.latency_repetitions,
     )
 
     # 3. Run drift track
     drift_baseline_score = _run_drift_adapter(
-        EvidentlyAdapter(), clean_df, drifted_df, "drift_baseline", drift_ground_truth
+        EvidentlyAdapter(),
+        clean_df,
+        drifted_df,
+        gradual_drifted_df,
+        "drift_baseline",
+        drift_ground_truth,
+        gradual_drift_ground_truth,
+        cfg.latency_repetitions,
     )
     drift_challenger_score = _run_drift_adapter(
-        EntropySentinel(), clean_df, drifted_df, "drift_challenger", drift_ground_truth
+        EntropySentinel(),
+        clean_df,
+        drifted_df,
+        gradual_drifted_df,
+        "drift_challenger",
+        drift_ground_truth,
+        gradual_drift_ground_truth,
+        cfg.latency_repetitions,
     )
 
     # 4. Assemble result
@@ -168,7 +197,12 @@ def _build_drift_ground_truth(profile: DriftProfile) -> set[str]:
 
 
 def _run_quality_adapter(
-    adapter, faulted_df, label: str, ground_truth: set[str]
+    adapter,
+    faulted_df,
+    label: str,
+    ground_truth: set[str],
+    distribution_ground_truth: set[str],
+    latency_repetitions: int,
 ) -> TrackScore:
     """Run a quality adapter and compute precision/recall/F1 using ground truth.
 
@@ -176,7 +210,9 @@ def _run_quality_adapter(
     is a true positive if it FAILs on a faulted column, and a false
     positive if it FAILs on a clean column.
     """
-    result = adapter.validate_batch(faulted_df, TAXI_CONTRACT, batch_id=label)
+    result, latency_ms = _measure_quality_adapter(
+        adapter, faulted_df, label, latency_repetitions
+    )
 
     checks = result.checks
     if not checks:
@@ -187,25 +223,28 @@ def _run_quality_adapter(
         parts = check_name.split(".")
         return parts[-1] if len(parts) > 1 else check_name
 
-    # Classify checks
-    tp = 0  # FAIL on faulted column (correct detection)
-    fp = 0  # FAIL on clean column (false alarm)
-    fn_columns = set(ground_truth)  # Faulted columns not yet detected
+    detected_faulted_columns: set[str] = set()
+    flagged_clean_columns: set[str] = set()
 
     for check in checks:
         col = _check_column(check.check_name)
         if check.status == "FAIL":
             if col in ground_truth:
-                tp += 1
-                fn_columns.discard(col)
+                detected_faulted_columns.add(col)
             else:
-                fp += 1
+                flagged_clean_columns.add(col)
 
-    fn = len(fn_columns)  # Faulted columns with no FAIL checks
+    tp = len(detected_faulted_columns)
+    fp = len(flagged_clean_columns)
+    fn = len(ground_truth - detected_faulted_columns)
 
     precision = tp / (tp + fp) if (tp + fp) > 0 else 1.0
     recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
     f1 = (2 * precision * recall / (precision + recall)) if (precision + recall) > 0 else 0.0
+    distribution_detection_rate = _rate(
+        detected_faulted_columns & distribution_ground_truth,
+        distribution_ground_truth,
+    )
 
     return TrackScore(
         track="quality",
@@ -213,13 +252,21 @@ def _run_quality_adapter(
         precision=round(precision, 4),
         recall=round(recall, 4),
         f1=round(f1, 4),
-        latency_ms=result.latency_ms,
+        distribution_detection_rate=round(distribution_detection_rate, 4),
+        latency_ms=latency_ms,
         batches_evaluated=1,
     )
 
 
 def _run_drift_adapter(
-    adapter, clean_df, drifted_df, label: str, ground_truth: set[str]
+    adapter,
+    clean_df,
+    drifted_df,
+    gradual_drifted_df,
+    label: str,
+    ground_truth: set[str],
+    gradual_ground_truth: set[str],
+    latency_repetitions: int,
 ) -> TrackScore:
     """Run a drift adapter and compute sensitivity/FPR using ground truth.
 
@@ -227,13 +274,19 @@ def _run_drift_adapter(
     Sensitivity = proportion of truly drifted feature columns detected.
     FPR = proportion of clean feature columns falsely flagged.
     """
+    drift_result, clean_result, latency_ms = _measure_drift_adapter(
+        adapter,
+        clean_df,
+        drifted_df,
+        label,
+        latency_repetitions,
+    )
     adapter.set_reference(clean_df)
-
-    # Test on drifted data (should detect drift on ground truth columns)
-    drift_result = adapter.check_drift(drifted_df, clean_df, batch_id=f"{label}_drifted")
-
-    # Test on clean data (should NOT detect drift — false positive check)
-    clean_result = adapter.check_drift(clean_df, clean_df, batch_id=f"{label}_clean")
+    gradual_result = adapter.check_drift(
+        gradual_drifted_df,
+        clean_df,
+        batch_id=f"{label}_gradual",
+    )
 
     # Sensitivity: proportion of truly drifted features correctly detected
     # Only count features in FEATURE_COLUMNS to exclude IDs/timestamps
@@ -249,25 +302,139 @@ def _run_drift_adapter(
     sensitivity = n_detected / len(truly_drifted) if truly_drifted else 0.0
 
     # FPR: proportion of clean feature columns falsely flagged on clean data
-    clean_checks = {
-        c.feature_name: c for c in clean_result.checks
-        if c.feature_name in FEATURE_COLUMNS
-    }
-    clean_feature_cols = FEATURE_COLUMNS - ground_truth
-    n_false_positive = sum(
-        1 for col in clean_feature_cols
-        if col in clean_checks and clean_checks[col].drifted
-    )
     # FPR on clean-vs-clean: any flagged feature is a false positive
     all_clean_checks = [c for c in clean_result.checks if c.feature_name in FEATURE_COLUMNS]
     n_fp_clean = sum(1 for c in all_clean_checks if c.drifted)
     fpr = n_fp_clean / len(all_clean_checks) if all_clean_checks else 0.0
+    gradual_sensitivity = _drift_sensitivity(gradual_result.checks, gradual_ground_truth)
 
     return TrackScore(
         track="drift",
         adapter_name=adapter.adapter_name,
         sensitivity=round(sensitivity, 4),
         false_positive_rate=round(fpr, 4),
-        latency_ms=drift_result.latency_ms + clean_result.latency_ms,
+        gradual_drift_sensitivity=round(gradual_sensitivity, 4),
+        single_score_interpretability=1.0 if "entropy_sentinel" in adapter.adapter_name else 0.0,
+        latency_ms=latency_ms,
         batches_evaluated=2,
     )
+
+
+def _measure_quality_adapter(adapter, batch, label: str, repeats: int):
+    latencies = []
+    result = None
+    for attempt in range(repeats):
+        result = adapter.validate_batch(batch, TAXI_CONTRACT, batch_id=f"{label}_{attempt + 1}")
+        latencies.append(result.latency_ms)
+    return result, round(median(latencies), 4)
+
+
+def _measure_drift_adapter(adapter, clean_df, drifted_df, label: str, repeats: int):
+    latencies = []
+    drift_result = None
+    clean_result = None
+    for attempt in range(repeats):
+        adapter.set_reference(clean_df)
+        drift_result = adapter.check_drift(
+            drifted_df,
+            clean_df,
+            batch_id=f"{label}_drifted_{attempt + 1}",
+        )
+        adapter.set_reference(clean_df)
+        clean_result = adapter.check_drift(
+            clean_df,
+            clean_df,
+            batch_id=f"{label}_clean_{attempt + 1}",
+        )
+        latencies.append(drift_result.latency_ms + clean_result.latency_ms)
+    return drift_result, clean_result, round(median(latencies), 4)
+
+
+def _drift_sensitivity(checks, ground_truth: set[str]) -> float:
+    drifted_checks = {c.feature_name: c for c in checks if c.feature_name in FEATURE_COLUMNS}
+    truly_drifted = ground_truth & FEATURE_COLUMNS
+    detected = sum(
+        1 for col in truly_drifted if col in drifted_checks and drifted_checks[col].drifted
+    )
+    return detected / len(truly_drifted) if truly_drifted else 1.0
+
+
+def _rate(detected: set[str], ground_truth: set[str]) -> float:
+    if not ground_truth:
+        return 1.0
+    return len(detected) / len(ground_truth)
+
+
+def main(argv: Optional[list[str]] = None) -> int:
+    """CLI entry point for local benchmark execution."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--seed", type=int, default=42, help="Deterministic RNG seed.")
+    parser.add_argument("--rows", type=int, default=1000, help="Rows per synthetic batch.")
+    parser.add_argument(
+        "--evidence-dir",
+        default="runs",
+        help="Directory for append-only JSON evidence bundles.",
+    )
+    args = parser.parse_args(argv)
+
+    result = run_benchmark(
+        BenchmarkConfig(
+            seed=args.seed,
+            n_rows=args.rows,
+            evidence_dir=args.evidence_dir,
+        )
+    )
+    gate_result = evaluate_benchmark(result)
+    print(
+        json.dumps(
+            {
+                "run_id": result.run_id,
+                "seed": result.seed,
+                "verdict": result.verdict,
+                "quality": {
+                    "baseline": (
+                        result.quality_baseline.__dict__
+                        if result.quality_baseline
+                        else None
+                    ),
+                    "challenger": (
+                        result.quality_challenger.__dict__
+                        if result.quality_challenger
+                        else None
+                    ),
+                },
+                "drift": {
+                    "baseline": result.drift_baseline.__dict__ if result.drift_baseline else None,
+                    "challenger": (
+                        result.drift_challenger.__dict__
+                        if result.drift_challenger
+                        else None
+                    ),
+                },
+                "gates": {
+                    "quality": [
+                        {
+                            "gate_id": gate.gate_id,
+                            "status": gate.status.value,
+                            "details": gate.details,
+                        }
+                        for gate in gate_result.quality_gates
+                    ],
+                    "drift": [
+                        {
+                            "gate_id": gate.gate_id,
+                            "status": gate.status.value,
+                            "details": gate.details,
+                        }
+                        for gate in gate_result.drift_gates
+                    ],
+                },
+            },
+            indent=2,
+        )
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

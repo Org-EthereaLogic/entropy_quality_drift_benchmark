@@ -1,20 +1,8 @@
-"""
-Integration test: full benchmark run across canonical seeds.
+"""Integration test: full benchmark run across canonical seeds."""
 
-Runs the complete dual-track benchmark and verifies that
-gate evaluation produces a deterministic, structured result
-with the challenger demonstrating measurable advantages.
-
-Author: Anthony Johnson | EthereaLogic LLC
-"""
-
-import pytest
-
-from entropy_quality_drift.runners.benchmark import (
-    BenchmarkConfig,
-    run_benchmark,
-)
+from entropy_quality_drift.contracts import BenchmarkResult, GateVerdict, TrackScore
 from entropy_quality_drift.metrics.gate_evaluator import evaluate_benchmark
+from entropy_quality_drift.runners.benchmark import BenchmarkConfig, run_benchmark
 
 
 class TestFullBenchmarkRun:
@@ -50,10 +38,11 @@ class TestFullBenchmarkRun:
         gate_result = evaluate_benchmark(result)
 
         hard_gates = [
-            g for g in list(gate_result.quality_gates) + list(gate_result.drift_gates)
+            g
+            for g in list(gate_result.quality_gates) + list(gate_result.drift_gates)
             if g.gate_id.startswith(("Q-GATE", "D-GATE"))
         ]
-        failed_gates = [g for g in hard_gates if g.passed is False]
+        failed_gates = [g for g in hard_gates if g.status is GateVerdict.FAIL]
 
         assert len(failed_gates) == 0, (
             f"Hard gates failed: {[(g.gate_id, g.details) for g in failed_gates]}"
@@ -64,9 +53,21 @@ class TestFullBenchmarkRun:
         result = run_benchmark(BenchmarkConfig(seed=42, n_rows=500))
         gate_result = evaluate_benchmark(result)
 
-        all_gate_ids = {g.gate_id for g in list(gate_result.quality_gates) + list(gate_result.drift_gates)}
-        expected = {"Q-GATE-1", "Q-GATE-2", "Q-GATE-3", "Q-WARN-1", "Q-WARN-2",
-                    "D-GATE-1", "D-GATE-2", "D-GATE-3", "D-WARN-1", "D-WARN-2"}
+        all_gate_ids = {
+            g.gate_id for g in list(gate_result.quality_gates) + list(gate_result.drift_gates)
+        }
+        expected = {
+            "Q-GATE-1",
+            "Q-GATE-2",
+            "Q-GATE-3",
+            "Q-WARN-1",
+            "Q-WARN-2",
+            "D-GATE-1",
+            "D-GATE-2",
+            "D-GATE-3",
+            "D-WARN-1",
+            "D-WARN-2",
+        }
         assert expected == all_gate_ids, f"Missing gates: {expected - all_gate_ids}"
 
     def test_deterministic_across_canonical_seeds(self):
@@ -85,10 +86,68 @@ class TestFullBenchmarkRun:
             gate_result = evaluate_benchmark(result)
 
             hard_gates = [
-                g for g in list(gate_result.quality_gates) + list(gate_result.drift_gates)
+                g
+                for g in list(gate_result.quality_gates) + list(gate_result.drift_gates)
                 if g.gate_id.startswith(("Q-GATE", "D-GATE"))
             ]
-            failed = [g for g in hard_gates if g.passed is False]
+            failed = [g for g in hard_gates if g.status is GateVerdict.FAIL]
             assert len(failed) == 0, (
                 f"Seed {seed}: hard gates failed: {[(g.gate_id, g.details) for g in failed]}"
             )
+
+    def test_hard_gate_warning_band_uses_config_fail_threshold(self):
+        """A hard gate can warn without failing when it is between pass and fail bands."""
+        result = BenchmarkResult(
+            run_id="band_test",
+            seed=1,
+            quality_baseline=TrackScore(
+                track="quality",
+                adapter_name="baseline",
+                precision=1.0,
+                recall=1.0,
+                f1=1.0,
+                latency_ms=10.0,
+            ),
+            quality_challenger=TrackScore(
+                track="quality",
+                adapter_name="challenger",
+                precision=1.0,
+                recall=1.0,
+                f1=1.0,
+                distribution_detection_rate=1.0,
+                latency_ms=12.0,
+            ),
+            drift_baseline=TrackScore(
+                track="drift",
+                adapter_name="baseline",
+                false_positive_rate=0.0,
+                sensitivity=1.0,
+                gradual_drift_sensitivity=0.8,
+                latency_ms=10.0,
+            ),
+            drift_challenger=TrackScore(
+                track="drift",
+                adapter_name="challenger",
+                false_positive_rate=0.0,
+                sensitivity=1.0,
+                gradual_drift_sensitivity=0.8,
+                single_score_interpretability=1.0,
+                latency_ms=25.0,
+            ),
+        )
+
+        gate_result = evaluate_benchmark(result)
+        d_gate_3 = next(g for g in gate_result.drift_gates if g.gate_id == "D-GATE-3")
+
+        assert d_gate_3.status is GateVerdict.WARN
+        assert gate_result.overall_verdict is GateVerdict.WARN
+
+    def test_evidence_bundle_is_append_only(self, tmp_path):
+        """Repeated runs must create distinct evidence files."""
+        config = BenchmarkConfig(seed=42, n_rows=250, evidence_dir=str(tmp_path))
+
+        run_benchmark(config)
+        run_benchmark(config)
+
+        files = list(tmp_path.glob("bench_42_*.json"))
+        assert len(files) == 2

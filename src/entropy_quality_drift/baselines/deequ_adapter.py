@@ -61,13 +61,15 @@ class DeequAdapter(BaseQualityAdapter):
         results = []
         for col_spec in contract.columns:
             present = col_spec.name in batch.columns
-            results.append(QualityCheckResult(
-                check_name=f"schema.column_present.{col_spec.name}",
-                status="PASS" if present else "FAIL",
-                observed_value=1.0 if present else 0.0,
-                threshold=1.0,
-                details="" if present else f"Column '{col_spec.name}' missing",
-            ))
+            results.append(
+                QualityCheckResult(
+                    check_name=f"schema.column_present.{col_spec.name}",
+                    status="PASS" if present else "FAIL",
+                    observed_value=1.0 if present else 0.0,
+                    threshold=1.0,
+                    details="" if present else f"Column '{col_spec.name}' missing",
+                )
+            )
         return results
 
     def _check_volume(
@@ -76,13 +78,15 @@ class DeequAdapter(BaseQualityAdapter):
         row_count = len(batch)
         low, high = contract.volume.expected_rows_per_batch
         status = "PASS" if low <= row_count <= high else "FAIL"
-        return [QualityCheckResult(
-            check_name="volume.row_count",
-            status=status,
-            observed_value=float(row_count),
-            threshold=float(high),
-            details=f"Expected [{low}, {high}], got {row_count}",
-        )]
+        return [
+            QualityCheckResult(
+                check_name="volume.row_count",
+                status=status,
+                observed_value=float(row_count),
+                threshold=float(high),
+                details=f"Expected [{low}, {high}], got {row_count}",
+            )
+        ]
 
     def _check_null_rates(
         self, batch: pd.DataFrame, contract: SourceContract
@@ -94,20 +98,24 @@ class DeequAdapter(BaseQualityAdapter):
             if col_spec.nullable:
                 null_rate = float(batch[col_spec.name].isna().mean())
                 status = "PASS" if null_rate <= contract.volume.max_null_rate else "FAIL"
-                results.append(QualityCheckResult(
-                    check_name=f"null_rate.{col_spec.name}",
-                    status=status,
-                    observed_value=null_rate,
-                    threshold=contract.volume.max_null_rate,
-                ))
+                results.append(
+                    QualityCheckResult(
+                        check_name=f"null_rate.{col_spec.name}",
+                        status=status,
+                        observed_value=null_rate,
+                        threshold=contract.volume.max_null_rate,
+                    )
+                )
             else:
                 null_count = int(batch[col_spec.name].isna().sum())
-                results.append(QualityCheckResult(
-                    check_name=f"not_null.{col_spec.name}",
-                    status="PASS" if null_count == 0 else "FAIL",
-                    observed_value=float(null_count),
-                    threshold=0.0,
-                ))
+                results.append(
+                    QualityCheckResult(
+                        check_name=f"not_null.{col_spec.name}",
+                        status="PASS" if null_count == 0 else "FAIL",
+                        observed_value=float(null_count),
+                        threshold=0.0,
+                    )
+                )
         return results
 
     def _check_ranges(
@@ -122,11 +130,13 @@ class DeequAdapter(BaseQualityAdapter):
                 continue
             low, high = col_spec.valid_range
             out_of_range = int(((col < low) | (col > high)).sum())
-            results.append(QualityCheckResult(
-                check_name=f"range.{col_spec.name}",
-                status="PASS" if out_of_range == 0 else "FAIL",
-                observed_value=out_of_range / len(col) if len(col) > 0 else 0.0,
-                threshold=0.0,
-                details=f"{out_of_range} values outside [{low}, {high}]",
-            ))
+            results.append(
+                QualityCheckResult(
+                    check_name=f"range.{col_spec.name}",
+                    status="PASS" if out_of_range == 0 else "FAIL",
+                    observed_value=out_of_range / len(col) if len(col) > 0 else 0.0,
+                    threshold=0.0,
+                    details=f"{out_of_range} values outside [{low}, {high}]",
+                )
+            )
         return results

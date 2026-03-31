@@ -69,9 +69,7 @@ class EvidentlyAdapter(BaseDriftAdapter):
             latency_ms=elapsed_ms,
         )
 
-    def _ks_test(
-        self, col_name: str, ref: pd.Series, cur: pd.Series
-    ) -> DriftCheckResult:
+    def _ks_test(self, col_name: str, ref: pd.Series, cur: pd.Series) -> DriftCheckResult:
         """Two-sample KS test for numeric features."""
         statistic, p_value = stats.ks_2samp(ref, cur)
         drifted = p_value < self.p_value_threshold
@@ -85,9 +83,7 @@ class EvidentlyAdapter(BaseDriftAdapter):
             details=f"KS stat={statistic:.4f}, p={p_value:.6f}",
         )
 
-    def _chi2_test(
-        self, col_name: str, ref: pd.Series, cur: pd.Series
-    ) -> DriftCheckResult:
+    def _chi2_test(self, col_name: str, ref: pd.Series, cur: pd.Series) -> DriftCheckResult:
         """Chi-squared test for categorical features."""
         all_cats = sorted(set(ref.unique()) | set(cur.unique()))
 

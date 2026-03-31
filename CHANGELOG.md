@@ -7,6 +7,23 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [Unreleased]
+
+### Fixed
+
+- Made gate evaluation configuration-driven from `configs/kpi_thresholds.json`, including correct PASS/WARN/FAIL handling for hard-gate warning bands.
+- Fixed the entropy drift challenger's clean-vs-clean false-positive behavior by comparing shared-binned numeric distributions and using separate numeric and categorical KL thresholds.
+- Made benchmark evidence bundle naming append-only in practice by using timestamped unique filenames.
+- Reduced benchmark latency flakiness by measuring median latency over repeated executions.
+- Fixed editable installs for the published package by declaring the Hatch wheel package path.
+
+### Changed
+
+- Expanded benchmark scoring to include distribution anomaly detection rate, gradual drift sensitivity, and interpretable single-score coverage.
+- Added CLI-ready benchmark execution and updated governance/docs surfaces to match current runtime behavior.
+- Updated GitHub Actions automation to publish coverage, run Snyk code scans on `main`, and pin third-party actions to immutable commit SHAs.
+- Ported the prior experiment command and agent surfaces into `.claude/commands/` and `.claude/agents/`.
+
 ## [0.1.0] — 2026-03-30
 
 ### Added

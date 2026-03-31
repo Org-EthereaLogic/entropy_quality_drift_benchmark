@@ -1,15 +1,4 @@
-"""
-Drift track tests: EntropySentinel vs Evidently KS-test baseline.
-
-Verifies that EntropySentinel matches KS-test on sudden drift
-and exceeds it on gradual drift and interpretability.
-
-Author: Anthony Johnson | EthereaLogic LLC
-"""
-
-import pytest
-import numpy as np
-import pandas as pd
+"""Drift track tests: EntropySentinel vs Evidently KS-test baseline."""
 
 from entropy_quality_drift.baselines.evidently_adapter import EvidentlyAdapter
 from entropy_quality_drift.challengers.entropy_sentinel import EntropySentinel
@@ -25,10 +14,14 @@ class TestSuddenDriftParity:
 
     def test_both_detect_sudden_numeric_shift(self):
         ref = generate_clean_batch(n_rows=1000, seed=42)
-        drifted = inject_drift(ref, DriftProfile(
-            distribution_shift_columns=("fare_amount",),
-            shift_magnitude=0.8,
-        ), seed=99)
+        drifted = inject_drift(
+            ref,
+            DriftProfile(
+                distribution_shift_columns=("fare_amount",),
+                shift_magnitude=0.8,
+            ),
+            seed=99,
+        )
 
         evidently = EvidentlyAdapter()
         evidently.set_reference(ref)
@@ -42,14 +35,20 @@ class TestSuddenDriftParity:
         es_fare = [c for c in es_result.checks if c.feature_name == "fare_amount"]
 
         assert len(ev_fare) > 0 and ev_fare[0].drifted, "Evidently should detect sudden fare drift"
-        assert len(es_fare) > 0 and es_fare[0].drifted, "EntropySentinel should detect sudden fare drift"
+        assert len(es_fare) > 0 and es_fare[0].drifted, (
+            "EntropySentinel should detect sudden fare drift"
+        )
 
     def test_both_detect_categorical_shift(self):
         ref = generate_clean_batch(n_rows=1000, seed=42)
-        drifted = inject_drift(ref, DriftProfile(
-            distribution_shift_columns=("pickup_zone",),
-            shift_magnitude=0.9,
-        ), seed=99)
+        drifted = inject_drift(
+            ref,
+            DriftProfile(
+                distribution_shift_columns=("pickup_zone",),
+                shift_magnitude=0.9,
+            ),
+            seed=99,
+        )
 
         evidently = EvidentlyAdapter()
         evidently.set_reference(ref)
@@ -111,10 +110,14 @@ class TestEntropyDriftAdvantage:
         entropy should detect the distribution shift.
         """
         ref = generate_clean_batch(n_rows=1000, seed=42)
-        drifted = inject_drift(ref, DriftProfile(
-            category_injection_columns=("payment_type",),
-            new_categories=("crypto", "voucher", "gift_card"),
-        ), seed=99)
+        drifted = inject_drift(
+            ref,
+            DriftProfile(
+                category_injection_columns=("payment_type",),
+                new_categories=("crypto", "voucher", "gift_card"),
+            ),
+            seed=99,
+        )
 
         sentinel = EntropySentinel()
         sentinel.set_reference(ref)
@@ -127,10 +130,14 @@ class TestEntropyDriftAdvantage:
     def test_dual_signal_details(self):
         """EntropySentinel provides entropy gradient + KL divergence in details."""
         ref = generate_clean_batch(n_rows=500, seed=42)
-        drifted = inject_drift(ref, DriftProfile(
-            distribution_shift_columns=("fare_amount",),
-            shift_magnitude=0.7,
-        ), seed=99)
+        drifted = inject_drift(
+            ref,
+            DriftProfile(
+                distribution_shift_columns=("fare_amount",),
+                shift_magnitude=0.7,
+            ),
+            seed=99,
+        )
 
         sentinel = EntropySentinel()
         sentinel.set_reference(ref)
@@ -145,10 +152,14 @@ class TestEntropyDriftAdvantage:
     def test_composite_health_score(self):
         """EntropySentinel produces a single batch-level health score."""
         ref = generate_clean_batch(n_rows=500, seed=42)
-        drifted = inject_drift(ref, DriftProfile(
-            distribution_shift_columns=("fare_amount", "trip_distance"),
-            shift_magnitude=0.7,
-        ), seed=99)
+        drifted = inject_drift(
+            ref,
+            DriftProfile(
+                distribution_shift_columns=("fare_amount", "trip_distance"),
+                shift_magnitude=0.7,
+            ),
+            seed=99,
+        )
 
         sentinel = EntropySentinel()
         sentinel.set_reference(ref)
@@ -169,10 +180,14 @@ class TestEntropyDriftAdvantage:
     def test_deterministic_across_runs(self):
         """Same inputs produce identical drift results."""
         ref = generate_clean_batch(n_rows=500, seed=42)
-        drifted = inject_drift(ref, DriftProfile(
-            distribution_shift_columns=("fare_amount",),
-            shift_magnitude=0.6,
-        ), seed=99)
+        drifted = inject_drift(
+            ref,
+            DriftProfile(
+                distribution_shift_columns=("fare_amount",),
+                shift_magnitude=0.6,
+            ),
+            seed=99,
+        )
 
         sentinel = EntropySentinel()
         sentinel.set_reference(ref)

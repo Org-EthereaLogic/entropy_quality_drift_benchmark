@@ -6,7 +6,6 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Optional
 
-
 # --- Source contract ---
 
 @dataclass(frozen=True)
@@ -112,6 +111,9 @@ class TrackScore:
     f1: float = 0.0
     false_positive_rate: float = 0.0
     sensitivity: float = 0.0
+    distribution_detection_rate: float = 0.0
+    gradual_drift_sensitivity: float = 0.0
+    single_score_interpretability: float = 0.0
     latency_ms: float = 0.0
     batches_evaluated: int = 0
 
@@ -144,6 +146,7 @@ class GateResult:
     baseline_value: Optional[float]
     challenger_value: Optional[float]
     threshold: Optional[float]
+    status: GateVerdict
     passed: Optional[bool]
     details: str = ""
 

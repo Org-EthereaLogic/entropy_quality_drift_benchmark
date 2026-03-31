@@ -13,6 +13,7 @@ import json
 import os
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
+from uuid import uuid4
 
 if TYPE_CHECKING:
     from entropy_quality_drift.contracts import BenchmarkResult, GateEvaluationResult
@@ -51,6 +52,7 @@ def write_evidence_bundle(
                     "baseline": g.baseline_value,
                     "challenger": g.challenger_value,
                     "threshold": g.threshold,
+                    "status": g.status.value,
                     "passed": g.passed,
                     "details": g.details,
                 }
@@ -63,6 +65,7 @@ def write_evidence_bundle(
                     "baseline": g.baseline_value,
                     "challenger": g.challenger_value,
                     "threshold": g.threshold,
+                    "status": g.status.value,
                     "passed": g.passed,
                     "details": g.details,
                 }
@@ -75,9 +78,10 @@ def write_evidence_bundle(
     evidence_dir = config.evidence_dir
     try:
         os.makedirs(evidence_dir, exist_ok=True)
-        ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-        filepath = os.path.join(evidence_dir, f"{result.run_id}_{ts}.json")
-        with open(filepath, "w") as f:
+        ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+        suffix = uuid4().hex[:8]
+        filepath = os.path.join(evidence_dir, f"{result.run_id}_{ts}_{suffix}.json")
+        with open(filepath, "x", encoding="utf-8") as f:
             json.dump(bundle, f, indent=2)
         return filepath
     except OSError:
@@ -94,6 +98,9 @@ def _score_dict(score) -> dict | None:
         "f1": score.f1,
         "false_positive_rate": score.false_positive_rate,
         "sensitivity": score.sensitivity,
+        "distribution_detection_rate": score.distribution_detection_rate,
+        "gradual_drift_sensitivity": score.gradual_drift_sensitivity,
+        "single_score_interpretability": score.single_score_interpretability,
         "latency_ms": round(score.latency_ms, 2),
         "batches_evaluated": score.batches_evaluated,
     }

@@ -3,6 +3,7 @@ __pycache__/
 *.pyo
 .venv/
 .env
+.codacy/
 .pytest_cache/
 .ruff_cache/
 *.egg-info/

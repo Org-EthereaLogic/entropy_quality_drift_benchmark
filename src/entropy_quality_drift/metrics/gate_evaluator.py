@@ -14,6 +14,11 @@ Author: Anthony Johnson | EthereaLogic LLC
 
 from __future__ import annotations
 
+import json
+import re
+from functools import lru_cache
+from pathlib import Path
+
 from entropy_quality_drift.contracts import (
     BenchmarkResult,
     GateEvaluationResult,
@@ -22,23 +27,36 @@ from entropy_quality_drift.contracts import (
     TrackScore,
 )
 
+CONFIG_PATH = Path(__file__).resolve().parents[3] / "configs" / "kpi_thresholds.json"
+RELATIVE_CONDITION_PATTERN = re.compile(
+    r"^(?P<operator><=|>=|<|>)(?P<anchor>baseline)"
+    r"(?:(?P<sign>[+-])(?P<delta>\d+(?:\.\d+)?))?$"
+)
+
 
 def evaluate_benchmark(result: BenchmarkResult) -> GateEvaluationResult:
     """Evaluate all gates for a complete benchmark run."""
-    quality_gates = _evaluate_quality_gates(
-        result.quality_baseline, result.quality_challenger
+    thresholds = _load_thresholds()
+    quality_gates = _evaluate_track_gates(
+        result.quality_baseline,
+        result.quality_challenger,
+        thresholds["quality_track"],
     )
-    drift_gates = _evaluate_drift_gates(
-        result.drift_baseline, result.drift_challenger
+    drift_gates = _evaluate_track_gates(
+        result.drift_baseline,
+        result.drift_challenger,
+        thresholds["drift_track"],
     )
 
     all_gates = list(quality_gates) + list(drift_gates)
 
-    if any(g.passed is None for g in all_gates):
+    statuses = {g.status for g in all_gates}
+
+    if GateVerdict.INCOMPLETE in statuses:
         verdict = GateVerdict.INCOMPLETE
-    elif any(g.passed is False and g.gate_id.startswith(("Q-GATE", "D-GATE")) for g in all_gates):
+    elif GateVerdict.FAIL in statuses:
         verdict = GateVerdict.FAIL
-    elif any(g.passed is False for g in all_gates):
+    elif GateVerdict.WARN in statuses:
         verdict = GateVerdict.WARN
     else:
         verdict = GateVerdict.PASS
@@ -51,157 +69,218 @@ def evaluate_benchmark(result: BenchmarkResult) -> GateEvaluationResult:
     )
 
 
-def _evaluate_quality_gates(
+@lru_cache(maxsize=1)
+def _load_thresholds() -> dict:
+    with CONFIG_PATH.open(encoding="utf-8") as handle:
+        return json.load(handle)
+
+
+def _evaluate_track_gates(
     baseline: TrackScore | None,
     challenger: TrackScore | None,
+    track_config: dict[str, dict],
 ) -> list[GateResult]:
-    """Evaluate quality track gates (Q-GATE-1 through Q-WARN-2)."""
-    gates = []
+    """Evaluate a configured track of benchmark gates."""
+    gates: list[GateResult] = []
 
     if baseline is None or challenger is None:
-        return [GateResult(
-            gate_id="Q-GATE-1", metric="precision",
-            baseline_value=None, challenger_value=None,
-            threshold=None, passed=None, details="NOT_MEASURED",
-        )]
+        return [
+            GateResult(
+                gate_id=gate_id,
+                metric=spec["metric"],
+                baseline_value=None,
+                challenger_value=None,
+                threshold=_threshold_for_display(spec),
+                status=GateVerdict.INCOMPLETE,
+                passed=None,
+                details="NOT_MEASURED",
+            )
+            for gate_id, spec in track_config.items()
+        ]
 
-    # Q-GATE-1: Precision >= baseline (fail if < baseline - 0.10)
-    gates.append(GateResult(
-        gate_id="Q-GATE-1",
-        metric="precision",
-        baseline_value=baseline.precision,
-        challenger_value=challenger.precision,
-        threshold=baseline.precision,
-        passed=challenger.precision >= baseline.precision - 0.10,
-        details=f"Challenger {challenger.precision:.3f} vs baseline {baseline.precision:.3f}",
-    ))
-
-    # Q-GATE-2: Recall >= 0.90 (fail below 0.80)
-    gates.append(GateResult(
-        gate_id="Q-GATE-2",
-        metric="recall",
-        baseline_value=baseline.recall,
-        challenger_value=challenger.recall,
-        threshold=0.90,
-        passed=challenger.recall >= 0.90,
-        details=f"Challenger recall {challenger.recall:.3f} (pass >= 0.90, fail < 0.80)",
-    ))
-
-    # Q-GATE-3: F1 >= baseline (fail if < baseline - 0.10)
-    gates.append(GateResult(
-        gate_id="Q-GATE-3",
-        metric="f1",
-        baseline_value=baseline.f1,
-        challenger_value=challenger.f1,
-        threshold=baseline.f1,
-        passed=challenger.f1 >= baseline.f1 - 0.10,
-        details=f"Challenger F1 {challenger.f1:.3f} vs baseline {baseline.f1:.3f}",
-    ))
-
-    # Q-WARN-1: Latency ratio <= 2.0x
-    if baseline.latency_ms > 0:
-        ratio = challenger.latency_ms / baseline.latency_ms
-        gates.append(GateResult(
-            gate_id="Q-WARN-1",
-            metric="latency_ratio",
-            baseline_value=baseline.latency_ms,
-            challenger_value=challenger.latency_ms,
-            threshold=2.0,
-            passed=ratio <= 2.0,
-            details=f"Ratio {ratio:.2f}x",
-        ))
-
-    # Q-WARN-2: Distribution detection rate >= 0.85
-    # Measured by comparing challenger recall vs baseline recall
-    # on the assumption that the difference is driven by distribution checks
-    distribution_advantage = challenger.recall - baseline.recall
-    distribution_detection = 1.0 if distribution_advantage > 0 else 0.0
-    # If challenger has higher recall, it's detecting distribution anomalies
-    # that baseline misses — the core thesis of the benchmark
-    gates.append(GateResult(
-        gate_id="Q-WARN-2",
-        metric="distribution_detection",
-        baseline_value=baseline.recall,
-        challenger_value=challenger.recall,
-        threshold=0.85,
-        passed=challenger.recall > baseline.recall,
-        details=f"Challenger recall {challenger.recall:.3f} > baseline {baseline.recall:.3f}: {challenger.recall > baseline.recall}",
-    ))
+    for gate_id, spec in track_config.items():
+        gates.append(_evaluate_gate(gate_id, spec, baseline, challenger))
 
     return gates
 
 
-def _evaluate_drift_gates(
-    baseline: TrackScore | None,
-    challenger: TrackScore | None,
-) -> list[GateResult]:
-    """Evaluate drift track gates (D-GATE-1 through D-WARN-2)."""
-    gates = []
+def _evaluate_gate(
+    gate_id: str,
+    spec: dict,
+    baseline: TrackScore,
+    challenger: TrackScore,
+) -> GateResult:
+    baseline_value, challenger_value = _metric_values(spec["metric"], baseline, challenger)
+    if baseline_value is None or challenger_value is None:
+        return GateResult(
+            gate_id=gate_id,
+            metric=spec["metric"],
+            baseline_value=baseline_value,
+            challenger_value=challenger_value,
+            threshold=_threshold_for_display(spec),
+            status=GateVerdict.INCOMPLETE,
+            passed=None,
+            details="METRIC_UNAVAILABLE",
+        )
 
-    if baseline is None or challenger is None:
-        return [GateResult(
-            gate_id="D-GATE-1", metric="false_positive_rate",
-            baseline_value=None, challenger_value=None,
-            threshold=None, passed=None, details="NOT_MEASURED",
-        )]
+    if "pass_condition" in spec:
+        status = _evaluate_relative_status(
+            challenger_value,
+            baseline_value,
+            spec["pass_condition"],
+            spec.get("fail_condition"),
+        )
+    elif "pass_threshold" in spec:
+        status = _evaluate_threshold_status(
+            challenger_value,
+            spec["comparison"],
+            spec["pass_threshold"],
+            spec.get("fail_threshold"),
+        )
+    else:
+        status = _evaluate_warn_status(
+            challenger_value,
+            spec["comparison"],
+            spec["warn_threshold"],
+        )
 
-    # D-GATE-1: FPR <= baseline + 0.05
-    gates.append(GateResult(
-        gate_id="D-GATE-1",
-        metric="false_positive_rate",
-        baseline_value=baseline.false_positive_rate,
-        challenger_value=challenger.false_positive_rate,
-        threshold=baseline.false_positive_rate + 0.05,
-        passed=challenger.false_positive_rate <= baseline.false_positive_rate + 0.05,
-        details=f"Challenger FPR {challenger.false_positive_rate:.3f} vs baseline {baseline.false_positive_rate:.3f} (+ 0.05 tolerance)",
-    ))
+    return GateResult(
+        gate_id=gate_id,
+        metric=spec["metric"],
+        baseline_value=round(float(baseline_value), 4),
+        challenger_value=round(float(challenger_value), 4),
+        threshold=_threshold_for_display(spec),
+        status=status,
+        passed=_passed_from_status(status),
+        details=_details_for_gate(gate_id, spec, baseline_value, challenger_value, status),
+    )
 
-    # D-GATE-2: Sensitivity >= 0.85
-    gates.append(GateResult(
-        gate_id="D-GATE-2",
-        metric="sensitivity",
-        baseline_value=baseline.sensitivity,
-        challenger_value=challenger.sensitivity,
-        threshold=0.85,
-        passed=challenger.sensitivity >= 0.85,
-        details=f"Challenger sensitivity {challenger.sensitivity:.3f} (pass >= 0.85)",
-    ))
 
-    # D-GATE-3: Latency ratio <= 2.0x
-    if baseline.latency_ms > 0:
-        ratio = challenger.latency_ms / baseline.latency_ms
-        gates.append(GateResult(
-            gate_id="D-GATE-3",
-            metric="latency_ratio",
-            baseline_value=baseline.latency_ms,
-            challenger_value=challenger.latency_ms,
-            threshold=2.0,
-            passed=ratio <= 2.0,
-            details=f"Ratio {ratio:.2f}x",
-        ))
+def _metric_values(
+    metric: str,
+    baseline: TrackScore,
+    challenger: TrackScore,
+) -> tuple[float | None, float | None]:
+    if metric == "latency_ratio":
+        if baseline.latency_ms <= 0:
+            return None, None
+        return 1.0, challenger.latency_ms / baseline.latency_ms
 
-    # D-WARN-1: Gradual drift sensitivity >= 0.70
-    # Evaluated as overall sensitivity (gradual drift tests exercise this path)
-    gates.append(GateResult(
-        gate_id="D-WARN-1",
-        metric="gradual_drift_sensitivity",
-        baseline_value=baseline.sensitivity,
-        challenger_value=challenger.sensitivity,
-        threshold=0.70,
-        passed=challenger.sensitivity >= 0.70,
-        details=f"Challenger sensitivity {challenger.sensitivity:.3f} (warn < 0.70)",
-    ))
+    return getattr(baseline, metric, None), getattr(challenger, metric, None)
 
-    # D-WARN-2: Single score interpretability (entropy produces composite health; KS does not)
-    # This is a structural property: EntropySentinel always produces composite_health
-    gates.append(GateResult(
-        gate_id="D-WARN-2",
-        metric="single_score_interpretability",
-        baseline_value=0.0,
-        challenger_value=1.0,
-        threshold=1.0,
-        passed=True,
-        details="EntropySentinel produces composite_health score; Evidently does not",
-    ))
 
-    return gates
+def _evaluate_relative_status(
+    value: float,
+    baseline_value: float,
+    pass_condition: str,
+    fail_condition: str | None,
+) -> GateVerdict:
+    if _relative_condition_met(value, baseline_value, pass_condition):
+        return GateVerdict.PASS
+    if fail_condition and _relative_condition_met(value, baseline_value, fail_condition):
+        return GateVerdict.FAIL
+    return GateVerdict.WARN
+
+
+def _evaluate_threshold_status(
+    value: float,
+    comparison: str,
+    pass_threshold: float,
+    fail_threshold: float | None,
+) -> GateVerdict:
+    if _comparison_met(value, comparison, pass_threshold):
+        return GateVerdict.PASS
+    if fail_threshold is not None and _fail_threshold_met(value, comparison, fail_threshold):
+        return GateVerdict.FAIL
+    return GateVerdict.WARN
+
+
+def _evaluate_warn_status(value: float, comparison: str, warn_threshold: float) -> GateVerdict:
+    if _comparison_met(value, comparison, warn_threshold):
+        return GateVerdict.PASS
+    return GateVerdict.WARN
+
+
+def _relative_condition_met(value: float, baseline_value: float, condition: str) -> bool:
+    match = RELATIVE_CONDITION_PATTERN.fullmatch(condition)
+    if match is None:
+        raise ValueError(f"Unsupported relative condition: {condition}")
+
+    delta = float(match.group("delta") or 0.0)
+    if match.group("sign") == "-":
+        target = baseline_value - delta
+    else:
+        target = baseline_value + delta
+
+    return _comparison_met(value, match.group("operator"), target)
+
+
+def _comparison_met(value: float, comparison: str, threshold: float) -> bool:
+    if comparison == "gte":
+        return value >= threshold
+    if comparison == "lte":
+        return value <= threshold
+    if comparison == "eq":
+        return value == threshold
+    if comparison == ">=":
+        return value >= threshold
+    if comparison == "<=":
+        return value <= threshold
+    if comparison == ">":
+        return value > threshold
+    if comparison == "<":
+        return value < threshold
+    raise ValueError(f"Unsupported comparison: {comparison}")
+
+
+def _fail_threshold_met(value: float, comparison: str, fail_threshold: float) -> bool:
+    inverse = {
+        "gte": "<",
+        "lte": ">",
+        "eq": "!=",
+    }
+    if comparison == "eq":
+        return value != fail_threshold
+    return _comparison_met(value, inverse[comparison], fail_threshold)
+
+
+def _passed_from_status(status: GateVerdict) -> bool | None:
+    if status is GateVerdict.PASS:
+        return True
+    if status is GateVerdict.FAIL:
+        return False
+    return None
+
+
+def _threshold_for_display(spec: dict) -> float | None:
+    return spec.get("pass_threshold") or spec.get("warn_threshold")
+
+
+def _details_for_gate(
+    gate_id: str,
+    spec: dict,
+    baseline_value: float,
+    challenger_value: float,
+    status: GateVerdict,
+) -> str:
+    metric = spec["metric"]
+    if metric == "latency_ratio":
+        return (
+            f"{status.value}: ratio={challenger_value:.2f}x "
+            f"(pass={spec.get('pass_threshold', spec.get('warn_threshold'))}, "
+            f"fail={spec.get('fail_threshold', 'n/a')})"
+        )
+
+    if "pass_condition" in spec:
+        return (
+            f"{status.value}: challenger={challenger_value:.3f}, "
+            f"baseline={baseline_value:.3f}, pass={spec['pass_condition']}, "
+            f"fail={spec.get('fail_condition', 'n/a')}"
+        )
+
+    threshold = spec.get("pass_threshold", spec.get("warn_threshold"))
+    return (
+        f"{status.value}: challenger={challenger_value:.3f}, "
+        f"baseline={baseline_value:.3f}, threshold={threshold}, "
+        f"fail={spec.get('fail_threshold', 'n/a')}"
+    )

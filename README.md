@@ -1,198 +1,342 @@
 # Entropy Quality & Drift Benchmark
 
-### Proving Shannon Entropy-Based Methods Are Competitive Against Industry Baselines for Databricks Medallion Architectures
+<p align="center">
+  <a href="https://github.com/Org-EthereaLogic/entropy_quality_drift_benchmark/actions/workflows/ci.yml"><img src="https://github.com/Org-EthereaLogic/entropy_quality_drift_benchmark/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://codecov.io/gh/Org-EthereaLogic/entropy_quality_drift_benchmark"><img src="https://codecov.io/gh/Org-EthereaLogic/entropy_quality_drift_benchmark/graph/badge.svg" alt="codecov"></a>
+  <a href="https://app.codacy.com/gh/Org-EthereaLogic/entropy_quality_drift_benchmark/dashboard"><img src="https://img.shields.io/badge/Codacy-enabled-222222?logo=codacy&logoColor=white" alt="Codacy enabled"></a>
+  <a href="https://snyk.io/"><img src="https://img.shields.io/badge/Snyk-code%20scan-4C4A73?logo=snyk&logoColor=white" alt="Snyk code scan"></a>
+  <a href="https://www.python.org/"><img src="https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue" alt="Python 3.10 | 3.11 | 3.12"></a>
+  <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License: MIT"></a>
+</p>
+
+**A public, replayable benchmark for proving where Shannon Entropy helps and where it still needs calibration in Databricks-style data quality and drift evaluation.**
 
 **Built by [Anthony Johnson](https://www.linkedin.com/in/anthonyjohnsonii/) | EthereaLogic LLC**
 
 ---
 
-## What This Is
+<details>
+<summary><strong>Table of Contents</strong></summary>
 
-A formal, reproducible benchmark that evaluates Shannon Entropy-based approaches against industry-standard baselines for two critical Databricks lakehouse concerns:
+- [What Makes This Different](#what-makes-this-different)
+- [Benchmark Architecture](#benchmark-architecture)
+- [Current Benchmark Status](#current-benchmark-status)
+- [Dual-Track Evaluation](#dual-track-evaluation)
+- [Gate Evaluation Matrix](#gate-evaluation-matrix)
+- [Technology Stack](#technology-stack)
+- [Automation](#automation)
+- [Quick Start](#quick-start)
+- [Project Structure](#project-structure)
+- [Agent and Claude Commands](#agent-and-claude-commands)
+- [Contributing and Security](#contributing-and-security)
 
-1. **Data Quality Validation** — EntropyForge (entropy challenger) vs. Deequ-style rules (industry baseline)
-2. **Data Drift Detection** — EntropySentinel (entropy challenger) vs. KS-test/Evidently (industry baseline)
-
-The benchmark answers a specific question: **can information-theoretic methods match or exceed standard approaches for data quality and drift detection in Bronze/Silver/Gold pipelines?**
-
----
-
-## Why This Matters
-
-Standard data quality tools (Deequ, Great Expectations) use rule-based checks: nulls, types, ranges, volumes. These catch **presence** problems. But they miss **distribution** problems:
-
-- A column where 98% of values silently collapse to one default
-- A join key that loses uniqueness after an upstream change
-- A categorical field that absorbs unexpected new values
-- A timestamp column that stops advancing (stale load)
-
-All of these pass null checks, type checks, and range checks. All of them corrupt downstream analytics.
-
-Shannon Entropy measures the *information content* of a column's value distribution. When entropy changes, the distribution has changed — regardless of whether every individual value passes its rules.
+</details>
 
 ---
 
-## Dual-Track Design
+## What Makes This Different
+
+Most public data-quality repos either show rule-based checks in isolation or
+assert that entropy-style signals help without proving it head to head. This
+repository does the comparison directly:
+
+- **Quality track**: `EntropyForge` vs. Deequ-style rules
+- **Drift track**: `EntropySentinel` vs. KS-test / Evidently-style checks
+- **Frozen gates**: benchmark verdicts are driven from [`configs/kpi_thresholds.json`](configs/kpi_thresholds.json)
+- **Append-only evidence**: every benchmark run writes a distinct JSON bundle to `runs/`
+
+The goal is not to claim universal superiority. The goal is to show, with
+replayable evidence, where entropy-based methods outperform structural rules
+and where they currently remain warning-band only.
+
+---
+
+## Benchmark Architecture
+
+```mermaid
+flowchart LR
+    subgraph Inputs ["Synthetic Benchmark Inputs"]
+        C["Clean Batch"]
+        QF["Quality Fault Injection"]
+        DF["Drift Injection"]
+        GF["Gradual Drift Injection"]
+    end
+
+    subgraph Quality ["Quality Track"]
+        QB["Deequ-style Baseline"]
+        QC["EntropyForge Challenger"]
+    end
+
+    subgraph Drift ["Drift Track"]
+        DB["KS / Evidently Baseline"]
+        DC["EntropySentinel Challenger"]
+    end
+
+    subgraph Evidence ["Scoring and Evidence"]
+        GT["Ground Truth"]
+        GE["JSON-driven Gate Evaluator"]
+        EB["Append-only Evidence Bundle"]
+    end
+
+    C --> QF
+    C --> DF
+    C --> GF
+    QF --> QB
+    QF --> QC
+    DF --> DB
+    DF --> DC
+    GF --> DB
+    GF --> DC
+    QB --> GT
+    QC --> GT
+    DB --> GT
+    DC --> GT
+    GT --> GE
+    GE --> EB
+
+    style QB fill:#7f8c8d,stroke:#5d6d7e,color:#fff
+    style DB fill:#7f8c8d,stroke:#5d6d7e,color:#fff
+    style QC fill:#c0392b,stroke:#922b21,color:#fff
+    style DC fill:#c0392b,stroke:#922b21,color:#fff
+    style GE fill:#2980b9,stroke:#1f618d,color:#fff
+    style EB fill:#27ae60,stroke:#1e8449,color:#fff
+```
+
+The runner generates deterministic taxi-like datasets, injects known faults and
+drift patterns, executes baseline and challenger adapters on identical inputs,
+then evaluates the result against the frozen gate contract.
+
+---
+
+## Current Benchmark Status
+
+Verified locally on **March 30, 2026**:
+
+- `ruff check src tests`: PASS
+- `pytest tests/ -v --tb=short`: PASS (`22 passed`)
+- `python -m entropy_quality_drift.runners.benchmark --seed 42 --rows 1000`: `WARN`
+
+Measured local seeded result for `seed=42`, `n_rows=1000`:
+
+| Track | Baseline | Challenger | Outcome |
+| --- | --- | --- | --- |
+| Quality recall | `0.75` | `1.00` | Entropy catches the distribution collapse the rules baseline misses |
+| Quality F1 | `0.8571` | `1.00` | Challenger outperforms baseline |
+| Drift sensitivity | `1.00` | `1.00` | Parity on the default sudden-drift scenario |
+| Drift false positive rate | `0.00` | `0.00` | Parity on clean-vs-clean benchmark scoring |
+| Overall verdict | n/a | `WARN` | Warning-band only because `Q-WARN-1` and `D-WARN-1` breach |
+
+Interpretation:
+
+- **Validated with caveat** for the current local benchmark profile
+- The entropy challengers clear all hard gates on the verified local run
+- The repository still reports a `WARN` verdict because:
+  - `EntropyForge` exceeds the quality latency warning threshold
+  - `EntropySentinel` does not yet meet the gradual-drift sensitivity warning gate
+
+---
+
+## Dual-Track Evaluation
 
 ### Quality Track
 
-| | Baseline (Deequ) | Challenger (EntropyForge) |
-|---|---|---|
+| Capability | Deequ-style Baseline | EntropyForge |
+| --- | --- | --- |
 | Schema checks | ✅ | ✅ |
-| Null rate checks | ✅ | ✅ |
-| Range validation | ✅ | ✅ |
+| Null-rate checks | ✅ | ✅ |
+| Range checks | ✅ | ✅ |
 | Volume checks | ✅ | ✅ |
+| Constant-column collapse detection | ❌ | ✅ |
 | Entropy collapse detection | ❌ | ✅ |
-| Cardinality anomaly detection | ❌ | ✅ |
-| Constant-column detection | ❌ | ✅ |
+| Distribution anomaly coverage metric | ❌ | ✅ |
 
-**Hypothesis:** EntropyForge matches Deequ precision on structural checks and exceeds Deequ recall on distribution-level anomalies.
+**Current evidence:** the challenger improves recall from `0.75` to `1.00`
+on the default seeded profile while holding precision at `1.00`.
 
 ### Drift Track
 
-| | Baseline (Evidently/KS-test) | Challenger (EntropySentinel) |
-|---|---|---|
-| Sudden numeric shift | ✅ | ✅ |
-| Sudden categorical shift | ✅ | ✅ |
-| Gradual distribution drift | Weak on small samples | ✅ (entropy gradient) |
-| New category injection | ✅ (chi-squared) | ✅ (entropy + KL divergence) |
-| Single interpretable score | ❌ (per-column p-values) | ✅ (composite health 0–1) |
-| Computational cost | O(n log n) sorting | O(n) value counts |
+| Capability | KS / Evidently Baseline | EntropySentinel |
+| --- | --- | --- |
+| Sudden numeric shift detection | ✅ | ✅ |
+| Sudden categorical shift detection | ✅ | ✅ |
+| Clean-vs-clean false-positive control | ✅ | ✅ |
+| Single interpretable batch score | ❌ primary surface | ✅ primary surface |
+| Gradual drift sensitivity | ✅ on current profile | WARN-band on current profile |
 
-**Hypothesis:** EntropySentinel matches KS-test sensitivity on sudden drift and exceeds it on gradual drift, with lower false positive rate and a single interpretable output.
-
----
-
-## Gate Definitions
-
-### Quality Track Gates
-
-| Gate | Metric | Condition | Description |
-|------|--------|-----------|-------------|
-| Q-GATE-1 | precision | >= baseline | Must not produce worse precision than Deequ |
-| Q-GATE-2 | recall | >= 0.90 | Must detect >= 90% of injected violations |
-| Q-GATE-3 | f1 | >= baseline | Balanced quality score |
-| Q-WARN-1 | latency_ratio | <= 2.0x | Should not exceed 2x baseline latency |
-| Q-WARN-2 | distribution_detection | >= 0.85 | Must detect >= 85% of distribution anomalies |
-
-### Drift Track Gates
-
-| Gate | Metric | Condition | Description |
-|------|--------|-----------|-------------|
-| D-GATE-1 | false_positive_rate | <= baseline + 0.05 | Must not produce excess false positives |
-| D-GATE-2 | sensitivity | >= 0.85 | Must detect >= 85% of injected drift |
-| D-GATE-3 | latency_ratio | <= 2.0x | Detection delay within 2x baseline |
-| D-WARN-1 | gradual_drift_sensitivity | >= 0.70 | Gradual drift detection sensitivity |
+**Current evidence:** the challenger now matches baseline sensitivity on the
+default drift profile and passes the same-distribution false-positive test,
+but it still misses the `D-WARN-1` gradual-drift target under the current
+calibration.
 
 ---
 
-## Project Structure
+## Gate Evaluation Matrix
 
-```
-entropy_quality_drift_benchmark/
-├── CLAUDE.md                                  # Workspace rules (no UMIF, public-safe)
-├── README.md                                  # This file
-├── LICENSE                                    # MIT
-├── pyproject.toml                             # Python packaging
-├── configs/
-│   └── kpi_thresholds.json                    # Frozen dual-track gate definitions
-├── src/entropy_quality_drift/
-│   ├── contracts/__init__.py                  # 12 frozen dataclasses
-│   ├── baselines/
-│   │   ├── __init__.py                        # Abstract adapter interfaces
-│   │   ├── deequ_adapter.py                   # Rule-based quality baseline
-│   │   └── evidently_adapter.py               # KS-test drift baseline
-│   ├── challengers/
-│   │   ├── entropy_forge.py                   # Entropy quality challenger
-│   │   └── entropy_sentinel.py                # Entropy gradient drift challenger
-│   ├── datasets/
-│   │   └── synthetic.py                       # Deterministic data + fault injection
-│   ├── metrics/
-│   │   └── gate_evaluator.py                  # Dual-track gate evaluation
-│   ├── runners/
-│   │   └── benchmark.py                       # Full benchmark orchestrator
-│   ├── evidence/                              # Append-only evidence bundles
-│   └── databricks_seams/                      # CDF reader, ingestion logger stubs
-└── tests/
-    ├── test_quality_track.py                  # 6 tests — structural parity + entropy advantage
-    ├── test_drift_track.py                    # 7 tests — parity + FPR control + entropy advantage
-    └── test_benchmark_integration.py          # 5 tests — full benchmark runs
-```
+The benchmark produces ten gates from the frozen configuration in
+`configs/kpi_thresholds.json`.
+
+| Gate | Type | Current Status (`seed=42`) | Meaning |
+| --- | --- | --- | --- |
+| `Q-GATE-1` | Hard | PASS | Challenger precision must not underperform baseline |
+| `Q-GATE-2` | Hard | PASS | Challenger recall must clear the hard threshold |
+| `Q-GATE-3` | Hard | PASS | Challenger F1 must not underperform baseline |
+| `Q-WARN-1` | Warning | WARN | Quality latency ratio is currently above target |
+| `Q-WARN-2` | Warning | PASS | Distribution anomaly detection rate clears target |
+| `D-GATE-1` | Hard | PASS | Challenger false positive rate stays within allowed band |
+| `D-GATE-2` | Hard | PASS | Challenger sensitivity clears the hard threshold |
+| `D-GATE-3` | Hard | PASS | Drift latency ratio stays within the allowed band |
+| `D-WARN-1` | Warning | WARN | Gradual drift sensitivity is still below target |
+| `D-WARN-2` | Warning | PASS | Challenger exposes a single interpretable score |
+
+The evaluator is configuration-driven: the code now reads the JSON gate
+contract instead of hardcoding divergent thresholds.
+
+---
+
+## Technology Stack
+
+| Component | Technology |
+| --- | --- |
+| Runtime | Python |
+| Data model | pandas + numpy |
+| Statistical baseline | scipy KS / chi-squared |
+| Quality baseline | Deequ-style rules |
+| Challengers | Shannon Entropy + KL divergence |
+| Validation | pytest + Ruff |
+| Coverage | pytest-cov + Codecov + Codacy upload |
+| Security scanning | Snyk code scan on main pushes |
+| Automation | GitHub Actions |
+
+## Automation
+
+- **CI matrix:** Python `3.10`, `3.11`, and `3.12`
+- **Lint gate:** `ruff check src/ tests/`
+- **Test gate:** `pytest tests/ -v --tb=short --cov=src --cov-report=xml:coverage.xml`
+- **Coverage upload:** Codecov and Codacy uploads on pushes to `main`
+- **Security scan:** Snyk code scanning on pushes to `main`
+
+The current workflow uses:
+
+- `CODACY_PROJECT_TOKEN`
+- `CODECOV_TOKEN`
+- `SNYK_TOKEN`
 
 ---
 
 ## Quick Start
 
 ### 1. Clone and Install
+
 ```bash
-git clone https://github.com/anthonyjohnsonii/entropy-quality-drift-benchmark.git
-cd entropy-quality-drift-benchmark
-pip install -e ".[dev]"
+git clone https://github.com/Org-EthereaLogic/entropy_quality_drift_benchmark.git
+cd entropy_quality_drift_benchmark
+python3.12 -m venv .venv
+. .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -e ".[dev]"
 ```
 
-### 2. Run All Tests
+### 2. Run Lint and Tests
+
 ```bash
-pytest tests/ -v
+ruff check src tests
+pytest tests/ -v --tb=short
 ```
 
 ### 3. Run the Full Benchmark
-```python
-from entropy_quality_drift.runners.benchmark import run_benchmark, BenchmarkConfig
 
-result = run_benchmark(BenchmarkConfig(seed=42, n_rows=1000))
-print(f"Verdict: {result.verdict}")
-print(f"Quality — Baseline F1: {result.quality_baseline.f1}, Challenger F1: {result.quality_challenger.f1}")
-print(f"Drift — Baseline FPR: {result.drift_baseline.false_positive_rate}, Challenger FPR: {result.drift_challenger.false_positive_rate}")
+```bash
+python -m entropy_quality_drift.runners.benchmark --seed 42 --rows 1000
 ```
 
 ### 4. Run the Key Proof Test
+
 ```bash
 pytest tests/test_quality_track.py::TestEntropyAdvantage::test_constant_collapse_deequ_misses_forge_catches -v
 ```
 
-This single test demonstrates the core value: Deequ passes on collapsed data, EntropyForge catches it.
+### 5. Inspect Generated Evidence
+
+Each run writes a unique JSON artifact to `runs/` or the `--evidence-dir` you
+provide:
+
+```bash
+python -m entropy_quality_drift.runners.benchmark --seed 42 --rows 1000 --evidence-dir /tmp/entropy_runs
+ls /tmp/entropy_runs
+```
 
 ---
 
-## Evidence Tiers
+## Project Structure
 
-| Tier | Label | Meaning |
-|------|-------|---------|
-| 1 | validated | Reproducible, multi-seed, all gates PASS |
-| 2 | validated_with_caveat | PASS/WARN, with documented limitations |
-| 3 | exploratory | Promising but insufficient for claims |
-| 4 | unsupported | No evidence or contradicted |
+```text
+entropy_quality_drift_benchmark/
+├── AGENTS.md
+├── CLAUDE.md
+├── README.md
+├── pyproject.toml
+├── configs/
+│   └── kpi_thresholds.json
+├── .claude/
+│   ├── agents/
+│   │   ├── cleanup_workspace.md
+│   │   ├── examine.md
+│   │   ├── lead-experiment-engineer.md
+│   │   ├── sdlc-technical-writer.md
+│   │   └── test-automator.md
+│   └── commands/
+│       ├── benchmark.md
+│       ├── cleanup_workspace.md
+│       ├── commit.md
+│       ├── doc-maintain.md
+│       ├── examine.md
+│       ├── review.md
+│       ├── sync.md
+│       └── verify.md
+├── src/entropy_quality_drift/
+│   ├── baselines/
+│   ├── challengers/
+│   ├── contracts/
+│   ├── datasets/
+│   ├── databricks_seams/
+│   ├── evidence/
+│   ├── metrics/
+│   └── runners/
+├── tests/
+└── runs/
+```
 
 ---
 
-## What This Repo Does NOT Include
+## Agent and Claude Commands
 
-- Proprietary algorithms (no UMIF, no ΔR, no dS/dTx, no CTM)
-- Client data or identifiers
+This repository now includes the reusable command surface carried forward from
+the prior experiment line, adapted for the public entropy benchmark:
+
+- `/benchmark` — run the benchmark harness and summarize gate output
+- `/cleanup_workspace` — preview or perform safe local cleanup
+- `/commit` — generate a scoped Conventional Commit
+- `/doc-maintain` — audit and update living documentation
+- `/examine` — independently examine a target from primary sources
+- `/review` — review a change against benchmark semantics
+- `/sync` — sync docs, commands, and workflow-facing artifacts
+- `/verify` — perform a non-destructive evidence-based verification pass
+
+Reusable agent briefs live in `.claude/agents/` for implementation, technical
+writing, deterministic test work, independent examination, and safe workspace
+cleanup.
+
+---
+
+## Contributing and Security
+
+- Contribution process: see [CONTRIBUTING.md](CONTRIBUTING.md)
+- Security reporting: see [SECURITY.md](SECURITY.md)
+- License: [MIT](LICENSE)
+
+## What This Repository Does Not Include
+
+- Proprietary UMIF-era primitives or formulas
+- Client data or client identifiers
 - Production credentials
-- Claims beyond what the benchmark evidence supports
-
----
-
-## Related Work
-
-- [Project 1: Entropy-Governed Medallion Pipeline Demo](https://github.com/anthonyjohnsonii/entropy-governed-medallion-demo) — Shows the entropy framework applied to a full Bronze/Silver/Gold pipeline
-- [Databricks Medallion Architecture](https://www.databricks.com/glossary/medallion-architecture)
-- [Shannon Entropy (Wikipedia)](https://en.wikipedia.org/wiki/Entropy_(information_theory))
-- [PyDeequ](https://github.com/awslabs/python-deequ) — Industry-standard quality library
-- [Evidently AI](https://www.evidentlyai.com/) — Industry-standard drift detection
-
----
-
-## Author
-
-**Anthony Johnson** — US-Based Databricks & Enterprise AI Solutions Architect
-
-- LinkedIn: [linkedin.com/in/anthonyjohnsonii](https://www.linkedin.com/in/anthonyjohnsonii/)
-- Company: EthereaLogic LLC
-
----
-
-## License
-
-MIT License. See [LICENSE](LICENSE) for details.
+- Claims beyond the measured benchmark evidence
