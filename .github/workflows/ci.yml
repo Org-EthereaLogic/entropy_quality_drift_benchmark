@@ -103,7 +103,32 @@ jobs:
         uses: snyk/actions/setup@9adf32b1121593767fc3c057af55b55db032dc04 # master
 
       - name: Run Snyk code scan
-        continue-on-error: true
-        run: snyk code test --severity-threshold=high
+        shell: bash
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        run: |
+          if [ -z "${SNYK_TOKEN:-}" ]; then
+            echo "::warning::SNYK_TOKEN is not configured; skipping Snyk code scan."
+            exit 0
+          fi
+
+          output_file="$(mktemp)"
+
+          if snyk code test --severity-threshold=high >"$output_file" 2>&1; then
+            cat "$output_file"
+            rm -f "$output_file"
+            exit 0
+          else
+            status=$?
+          fi
+
+          cat "$output_file"
+
+          if grep -qiE '401|unauthorized|authentication failed|invalid api token|missing api token' "$output_file"; then
+            echo "::warning::Snyk authentication failed; skipping code scan without failing CI."
+            rm -f "$output_file"
+            exit 0
+          fi
+
+          rm -f "$output_file"
+          exit "$status"

@@ -9,6 +9,10 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Fixed
+
+- Security scanning now skips with a workflow warning when `SNYK_TOKEN` is missing or authentication fails, while still failing CI for real Snyk scan errors and findings.
+
 ## [0.2.0] — 2026-03-30
 
 ### Added

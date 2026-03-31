@@ -383,13 +383,13 @@ changing the benchmark runner.
 - **Lint gate:** `ruff check src tests docs`
 - **Test gate:** `pytest tests/ -v --tb=short --cov=src --cov-report=xml:coverage.xml`
 - **Coverage upload:** Codecov and Codacy uploads on pushes to `main`
-- **Security scan:** Snyk code scanning on pushes to `main`
+- **Security scan:** Snyk code scanning on pushes to `main`; missing or invalid `SNYK_TOKEN` downgrades the scan to a workflow warning instead of a CI blocker
 
 The current workflow uses:
 
 - `CODACY_PROJECT_TOKEN`
 - `CODECOV_TOKEN`
-- `SNYK_TOKEN`
+- `SNYK_TOKEN` for Snyk code scanning; when absent or invalid, CI emits a warning and skips the scan without failing the workflow
 
 ---
 
