@@ -1,19 +1,24 @@
 """Generate README visualizations for the entropy quality & drift benchmark.
 
-Produces three publication-ready PNG images from a deterministic benchmark
-run (seed=42, n_rows=1000).  Images use the same dark-theme palette as the
-entropy_governed_medallion_demo so the two projects share a consistent
-visual identity.
+By default, this script replays a committed sample evidence bundle so the
+generated PNGs are reproducible and idempotent in CI. Use ``--live`` to
+preview a fresh benchmark run instead.
 
 Usage:
     pip install -e ".[docs]"
     python docs/generate_visuals.py
+    python docs/generate_visuals.py --live
+    python docs/generate_visuals.py --evidence path/to/bundle.json
 
 Author: Anthony Johnson | EthereaLogic LLC
 """
 
 from __future__ import annotations
 
+import argparse
+import json
+import os
+from datetime import datetime
 from pathlib import Path
 
 import matplotlib
@@ -22,13 +27,22 @@ matplotlib.use("Agg")
 import matplotlib.patches as mpatches  # noqa: E402
 import matplotlib.pyplot as plt  # noqa: E402
 
+from entropy_quality_drift.contracts import (  # noqa: E402
+    BenchmarkResult,
+    GateEvaluationResult,
+    GateResult,
+    GateVerdict,
+    TrackScore,
+)
 from entropy_quality_drift.runners.benchmark import (  # noqa: E402
     BenchmarkConfig,
     run_benchmark_with_gates,
 )
 
 OUTPUT_DIR = Path(__file__).parent / "images"
-OUTPUT_DIR.mkdir(exist_ok=True)
+FIXTURE_PATH = Path(__file__).parent / "fixtures" / "sample_evidence_seed42.json"
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+PNG_METADATA = {"Software": "entropy_quality_drift.docs.generate_visuals"}
 
 # ---------------------------------------------------------------------------
 # Color palette — matches entropy_governed_medallion_demo
@@ -47,10 +61,95 @@ COLORS = {
 }
 
 
-def _run_benchmark():
-    """Execute the benchmark once and return (result, gate_result)."""
-    cfg = BenchmarkConfig(seed=42, n_rows=1000, evidence_dir="/dev/null")
-    return run_benchmark_with_gates(cfg)
+def _parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--evidence",
+        type=Path,
+        default=FIXTURE_PATH,
+        help="Evidence bundle to replay into docs visuals.",
+    )
+    parser.add_argument(
+        "--live",
+        action="store_true",
+        help="Run a fresh benchmark instead of replaying the committed sample evidence.",
+    )
+    return parser.parse_args()
+
+
+def _load_visualization_inputs(
+    evidence_path: Path,
+    live: bool,
+) -> tuple[BenchmarkResult, GateEvaluationResult, str]:
+    if live:
+        cfg = BenchmarkConfig(seed=42, n_rows=1000, evidence_dir=os.devnull)
+        result, gate_result = run_benchmark_with_gates(cfg)
+        return result, gate_result, "Live benchmark preview"
+
+    bundle = json.loads(evidence_path.read_text(encoding="utf-8"))
+    verified_label = _format_verified_label(bundle["timestamp"])
+    return _result_from_bundle(bundle), _gate_result_from_bundle(bundle), verified_label
+
+
+def _result_from_bundle(bundle: dict) -> BenchmarkResult:
+    return BenchmarkResult(
+        run_id=bundle["run_id"],
+        seed=bundle["seed"],
+        quality_baseline=_score_from_bundle("quality", bundle["quality_track"]["baseline"]),
+        quality_challenger=_score_from_bundle("quality", bundle["quality_track"]["challenger"]),
+        drift_baseline=_score_from_bundle("drift", bundle["drift_track"]["baseline"]),
+        drift_challenger=_score_from_bundle("drift", bundle["drift_track"]["challenger"]),
+        verdict=bundle["overall_verdict"],
+    )
+
+
+def _score_from_bundle(track: str, score: dict) -> TrackScore:
+    return TrackScore(
+        track=track,
+        adapter_name=score["adapter"],
+        precision=score["precision"],
+        recall=score["recall"],
+        f1=score["f1"],
+        false_positive_rate=score["false_positive_rate"],
+        sensitivity=score["sensitivity"],
+        distribution_detection_rate=score["distribution_detection_rate"],
+        gradual_drift_sensitivity=score["gradual_drift_sensitivity"],
+        single_score_interpretability=score["single_score_interpretability"],
+        latency_ms=score["latency_ms"],
+        batches_evaluated=score["batches_evaluated"],
+    )
+
+
+def _gate_result_from_bundle(bundle: dict) -> GateEvaluationResult:
+    return GateEvaluationResult(
+        run_id=bundle["run_id"],
+        quality_gates=tuple(_gate_from_bundle(gate) for gate in bundle["gates"]["quality"]),
+        drift_gates=tuple(_gate_from_bundle(gate) for gate in bundle["gates"]["drift"]),
+        overall_verdict=GateVerdict(bundle["overall_verdict"]),
+    )
+
+
+def _gate_from_bundle(gate: dict) -> GateResult:
+    return GateResult(
+        gate_id=gate["gate_id"],
+        metric=gate["metric"],
+        baseline_value=gate["baseline"],
+        challenger_value=gate["challenger"],
+        threshold=gate["threshold"],
+        status=GateVerdict(gate["status"]),
+        passed=gate["passed"],
+        details=gate["details"],
+        thresholds=gate.get("thresholds"),
+    )
+
+
+def _format_verified_label(timestamp: str) -> str:
+    dt = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+    return f"Verified {dt.strftime('%B %d, %Y')}"
+
+
+def _save_figure(fig, out: Path, **kwargs) -> None:
+    fig.savefig(out, facecolor=COLORS["dark_bg"], metadata=PNG_METADATA, **kwargs)
 
 
 # ---------------------------------------------------------------------------
@@ -120,7 +219,7 @@ def generate_track_comparison(result):
 
     plt.tight_layout(rect=[0, 0.06, 1, 0.89])
     out = OUTPUT_DIR / "track_comparison.png"
-    plt.savefig(out, dpi=150, facecolor=COLORS["dark_bg"])
+    _save_figure(fig, out, dpi=150)
     plt.close()
     print(f"Generated: {out}")
 
@@ -254,7 +353,7 @@ def generate_gate_evaluation(gate_result):
 
     verdict_explanation = {
         "PASS": "All hard gates and advisory gates cleared.",
-        "WARN": "All hard gates passed.  Advisory thresholds surfaced improvement areas.",
+        "WARN": "All hard gates passed.  Warning thresholds surfaced improvement areas.",
         "FAIL": "At least one hard gate breached.",
     }.get(verdict, "Evaluation incomplete.")
 
@@ -267,8 +366,7 @@ def generate_gate_evaluation(gate_result):
     )
 
     out = OUTPUT_DIR / "gate_evaluation.png"
-    plt.savefig(out, dpi=150, facecolor=COLORS["dark_bg"],
-                bbox_inches="tight", pad_inches=0.3)
+    _save_figure(fig, out, dpi=150, bbox_inches="tight", pad_inches=0.3)
     plt.close()
     print(f"Generated: {out}")
 
@@ -290,7 +388,7 @@ def _format_threshold(gate):
 # ---------------------------------------------------------------------------
 # 3. Benchmark Verdict Dashboard — summary view with key metrics
 # ---------------------------------------------------------------------------
-def generate_verdict_dashboard(result, gate_result):
+def generate_verdict_dashboard(result, gate_result, verified_label: str):
     """Dashboard showing verdict, key wins, and warning areas."""
 
     fig = plt.figure(figsize=(16, 9), facecolor=COLORS["dark_bg"])
@@ -301,8 +399,7 @@ def generate_verdict_dashboard(result, gate_result):
     )
     fig.text(
         0.5, 0.92,
-        f"seed=42  |  n_rows=1,000  |  10 frozen gates  |  "
-        f"Verified {_today()}",
+        f"seed=42  |  n_rows=1,000  |  10 frozen gates  |  {verified_label}",
         ha="center", fontsize=11, color=COLORS["light_gray"],
     )
 
@@ -345,7 +442,7 @@ def generate_verdict_dashboard(result, gate_result):
     )
 
     out = OUTPUT_DIR / "benchmark_verdict.png"
-    plt.savefig(out, dpi=150, facecolor=COLORS["dark_bg"])
+    _save_figure(fig, out, dpi=150)
     plt.close()
     print(f"Generated: {out}")
 
@@ -444,23 +541,18 @@ def _draw_verdict_panel(ax, gate_result):
     for spine in ax.spines.values():
         spine.set_color(COLORS["grid"])
 
-
-def _today() -> str:
-    """Return today's date as a string."""
-    from datetime import datetime, timezone
-    return datetime.now(timezone.utc).strftime("%B %d, %Y")
-
-
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 if __name__ == "__main__":
-    print("Running benchmark (seed=42, n_rows=1000)...")
-    result, gate_result = _run_benchmark()
+    args = _parse_args()
+    mode = "live benchmark" if args.live else f"sample evidence from {args.evidence}"
+    print(f"Loading visualization inputs from {mode}...")
+    result, gate_result, verified_label = _load_visualization_inputs(args.evidence, args.live)
     print(f"Benchmark verdict: {gate_result.overall_verdict.value}\n")
 
     generate_track_comparison(result)
     generate_gate_evaluation(gate_result)
-    generate_verdict_dashboard(result, gate_result)
+    generate_verdict_dashboard(result, gate_result, verified_label)
 
     print("\nAll visualizations generated successfully.")

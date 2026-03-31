@@ -138,9 +138,11 @@ then evaluates the result against the frozen gate contract.
 
 ## See It in Action
 
-The following visualizations are generated from a deterministic benchmark run
-(`seed=42`, `n_rows=1000`).  Regenerate them with `python docs/generate_visuals.py`
-after installing the `[docs]` extra (`pip install -e ".[docs]"`).
+The following visualizations replay a committed sample evidence bundle for the
+deterministic benchmark (`seed=42`, `n_rows=1000`). Regenerate them with
+`python docs/generate_visuals.py` after installing the `[docs]` extra
+(`pip install -e ".[docs]"`). Use `--live` only if you want to preview a fresh,
+timing-sensitive benchmark run instead of the stable docs fixture.
 
 ### Head-to-Head Track Comparison
 
@@ -382,6 +384,8 @@ changing the benchmark runner.
 - **CI matrix:** Python `3.10`, `3.11`, and `3.12`
 - **Lint gate:** `ruff check src tests docs`
 - **Test gate:** `pytest tests/ -v --tb=short --cov=src --cov-report=xml:coverage.xml`
+- **Package smoke test:** build the wheel, install it into a clean venv, and run the benchmark via `python -m entropy_quality_drift.runners.benchmark`
+- **Docs stability gate:** replay the committed docs fixture and fail if regenerating `docs/images/*.png` changes tracked bytes
 - **Coverage upload:** Codecov and Codacy uploads on pushes to `main`
 - **Security scan:** Snyk code scanning on pushes to `main`; missing or invalid `SNYK_TOKEN` downgrades the scan to a workflow warning instead of a CI blocker
 
@@ -450,6 +454,8 @@ entropy_quality_drift_benchmark/
 ├── docs/
 │   ├── databricks_walkthrough.md
 │   ├── generate_visuals.py
+│   ├── fixtures/
+│   │   └── sample_evidence_seed42.json
 │   └── images/
 │       ├── track_comparison.png
 │       ├── gate_evaluation.png

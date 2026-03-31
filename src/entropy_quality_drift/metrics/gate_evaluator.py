@@ -17,6 +17,7 @@ from __future__ import annotations
 import json
 import re
 from functools import lru_cache
+from importlib.resources import files
 from pathlib import Path
 
 from entropy_quality_drift.contracts import (
@@ -27,7 +28,6 @@ from entropy_quality_drift.contracts import (
     TrackScore,
 )
 
-CONFIG_PATH = Path(__file__).resolve().parents[3] / "configs" / "kpi_thresholds.json"
 RELATIVE_CONDITION_PATTERN = re.compile(
     r"^(?P<operator><=|>=|<|>)(?P<anchor>baseline)"
     r"(?:(?P<sign>[+-])(?P<delta>\d+(?:\.\d+)?))?$"
@@ -71,7 +71,16 @@ def evaluate_benchmark(result: BenchmarkResult) -> GateEvaluationResult:
 
 @lru_cache(maxsize=1)
 def _load_thresholds() -> dict:
-    with CONFIG_PATH.open(encoding="utf-8") as handle:
+    packaged_path = (
+        files("entropy_quality_drift")
+        .joinpath("configs")
+        .joinpath("kpi_thresholds.json")
+    )
+    if packaged_path.is_file():
+        return json.loads(packaged_path.read_text(encoding="utf-8"))
+
+    config_path = Path(__file__).resolve().parents[3] / "configs" / "kpi_thresholds.json"
+    with config_path.open(encoding="utf-8") as handle:
         return json.load(handle)
 
 

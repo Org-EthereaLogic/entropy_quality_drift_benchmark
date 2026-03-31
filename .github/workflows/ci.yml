@@ -84,6 +84,41 @@ jobs:
           test -f docs/images/gate_evaluation.png
           test -f docs/images/benchmark_verdict.png
 
+      - name: Verify tracked docs images stay unchanged
+        run: git diff --exit-code -- docs/images
+
+  package:
+    name: Package (wheel smoke test)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build wheel
+        run: |
+          python -m pip install --upgrade pip build
+          python -m build --wheel
+
+      - name: Install wheel into clean virtualenv
+        run: |
+          python -m venv /tmp/entropy-wheel-smoke
+          /tmp/entropy-wheel-smoke/bin/python -m pip install --upgrade pip
+          /tmp/entropy-wheel-smoke/bin/pip install dist/*.whl
+
+      - name: Run packaged benchmark smoke test
+        run: |
+          evidence_dir="$(mktemp -d)"
+          /tmp/entropy-wheel-smoke/bin/python -m entropy_quality_drift.runners.benchmark \
+            --seed 42 \
+            --rows 1000 \
+            --evidence-dir "$evidence_dir"
+          ls "$evidence_dir"/bench_42_*.json
+
   security:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest

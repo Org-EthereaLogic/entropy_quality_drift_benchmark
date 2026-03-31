@@ -42,3 +42,6 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/entropy_quality_drift"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"configs/kpi_thresholds.json" = "entropy_quality_drift/configs/kpi_thresholds.json"

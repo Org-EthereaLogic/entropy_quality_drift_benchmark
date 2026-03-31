@@ -9,9 +9,16 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Added
+
+- Wheel-install smoke test in CI that builds the package, installs it into a clean virtualenv, and runs the benchmark through the published module entry point.
+- Committed docs fixture (`docs/fixtures/sample_evidence_seed42.json`) so visualization generation replays stable evidence by default.
+
 ### Fixed
 
 - Security scanning now skips with a workflow warning when `SNYK_TOKEN` is missing or authentication fails, while still failing CI for real Snyk scan errors and findings.
+- Benchmark gate configuration now loads from packaged resources in wheel installs, while preserving a source-tree fallback for editable development.
+- Docs image generation is now reproducible: it replays fixed evidence by default, removes date-based drift from the verdict dashboard, and writes stable PNG metadata.
 
 ## [0.2.0] — 2026-03-30
 
