@@ -1,6 +1,6 @@
 [project]
 name = "entropy-quality-drift-benchmark"
-version = "0.2.0"
+version = "0.2.1"
 description = "Benchmark proving Shannon Entropy-based methods are competitive against industry baselines for data quality validation and drift detection in Databricks medallion architectures"
 readme = "README.md"
 license = { text = "MIT" }
@@ -8,11 +8,31 @@ authors = [
     { name = "Anthony Johnson", email = "anthony@etherealogic.com" },
 ]
 requires-python = ">=3.10"
+keywords = ["benchmark", "data quality", "drift detection", "entropy", "databricks"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Software Development :: Quality Assurance",
+]
 dependencies = [
     "pandas>=2.0",
     "numpy>=1.24",
     "scipy>=1.11",
 ]
+
+[project.urls]
+Homepage = "https://github.com/Org-EthereaLogic/entropy_quality_drift_benchmark"
+Repository = "https://github.com/Org-EthereaLogic/entropy_quality_drift_benchmark"
+Issues = "https://github.com/Org-EthereaLogic/entropy_quality_drift_benchmark/issues"
+Releases = "https://github.com/Org-EthereaLogic/entropy_quality_drift_benchmark/releases"
 
 [project.optional-dependencies]
 dev = [

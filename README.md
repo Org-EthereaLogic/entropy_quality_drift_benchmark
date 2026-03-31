@@ -385,7 +385,7 @@ changing the benchmark runner.
 - **Lint gate:** `ruff check src tests docs`
 - **Test gate:** `pytest tests/ -v --tb=short --cov=src --cov-report=xml:coverage.xml`
 - **Package smoke test:** build the wheel, install it into a clean venv, and run the benchmark via `python -m entropy_quality_drift.runners.benchmark`
-- **Docs stability gate:** replay the committed docs fixture and fail if regenerating `docs/images/*.png` changes tracked bytes
+- **Docs stability gate:** replay the committed docs fixture and verify that back-to-back regenerations of `docs/images/*.png` produce identical output
 - **Coverage upload:** Codecov and Codacy uploads on pushes to `main`
 - **Security scan:** Snyk code scanning on pushes to `main`; missing or invalid `SNYK_TOKEN` downgrades the scan to a workflow warning instead of a CI blocker
 
