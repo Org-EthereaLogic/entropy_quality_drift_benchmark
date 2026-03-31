@@ -1,6 +1,6 @@
 # Contributing to Entropy Quality & Drift Benchmark
 
-Thank you for your interest in contributing. This project is a formal benchmark — contributions must preserve its scientific integrity and public-safety requirements.
+Thank you for your interest in contributing. This repository is a public benchmark for evaluating controls that are meant to stop silent data failures before they reach KPI or AI workflows. Contributions must preserve its scientific integrity, evidence traceability, and public-safety requirements.
 
 ## Before You Contribute
 

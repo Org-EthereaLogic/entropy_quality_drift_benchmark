@@ -134,10 +134,10 @@ Job: daily_quality_drift_check
 ## What the Benchmark Proves for This Pattern
 
 1. **Entropy catches what rules miss.** The quality track shows `EntropyForge`
-   detecting constant-column collapse (`recall: 1.00`) that the Deequ-style
-   baseline misses (`recall: 0.75`). In a Databricks pipeline, this means the
-   entropy check would catch a silent data issue that Expectations alone would
-   pass through.
+   improving recall from `0.80` to `1.00` by catching constant-column collapse
+   that the Deequ-style baseline misses, while both adapters now score the
+   duplicate-key fault. In a Databricks pipeline, this means the entropy check
+   would catch a silent data issue that Expectations alone would pass through.
 
 2. **Gate logic is portable.** The `GateEvaluator` reads a JSON contract with
    symbolic conditions (`>=baseline`, numeric thresholds, warn bands). This

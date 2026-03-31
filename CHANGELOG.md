@@ -9,6 +9,21 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Added
+
+- Primary-key duplicate detection in both quality adapters so the default seeded benchmark scores all injected quality faults, including duplicate-row injection.
+- `evidence_schema_version` in new evidence bundles and a `runs/README.md` note documenting the append-only archive and legacy schema revisions.
+
+### Changed
+
+- Benchmark execution now fails loudly when evidence cannot be written, rather than reporting a completed verdict without an audit bundle.
+- Public metadata and method descriptions now use neutral comparison language where the benchmark does not currently support superiority claims.
+- Public-facing docs now lead with the technology-leadership decision problem, link to a dedicated technical appendix, and keep benchmark claims tied to the verified seeded result.
+
+### Fixed
+
+- README, walkthrough, fixture evidence, and generated visuals now match the current seeded benchmark semantics (`quality recall 0.80`, `quality F1 0.8889`) after duplicate-key scoring was added.
+
 ## [0.2.1] — 2026-03-30
 
 ### Added

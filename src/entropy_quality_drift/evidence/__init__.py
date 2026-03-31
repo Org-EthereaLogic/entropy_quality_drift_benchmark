@@ -1,8 +1,8 @@
 """Append-only evidence bundles.
 
-Writes structured JSON evidence for each benchmark run to the
-``runs/`` directory. Evidence is never overwritten — each run
-produces a new timestamped file.
+Writes structured JSON evidence for each successful benchmark run to the
+``runs/`` directory. Evidence is never overwritten — each run produces
+a new timestamped file.
 
 Author: Anthony Johnson | EthereaLogic LLC
 """
@@ -15,6 +15,9 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
+EVIDENCE_SCHEMA_VERSION = 2
+
+
 if TYPE_CHECKING:
     from entropy_quality_drift.contracts import BenchmarkResult, GateEvaluationResult
     from entropy_quality_drift.runners.benchmark import BenchmarkConfig
@@ -24,13 +27,14 @@ def write_evidence_bundle(
     result: "BenchmarkResult",
     gate_result: "GateEvaluationResult",
     config: "BenchmarkConfig",
-) -> str | None:
+) -> str:
     """Write a JSON evidence bundle for one benchmark run.
 
-    Returns the filepath written, or ``None`` if writing fails
-    (e.g., read-only filesystem during CI).
+    Returns the filepath written. Evidence write failures are raised so
+    callers cannot report a completed benchmark without an audit trail.
     """
     bundle = {
+        "evidence_schema_version": EVIDENCE_SCHEMA_VERSION,
         "run_id": result.run_id,
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "seed": result.seed,
@@ -86,8 +90,10 @@ def write_evidence_bundle(
         with open(filepath, "x", encoding="utf-8") as f:
             json.dump(bundle, f, indent=2)
         return filepath
-    except OSError:
-        return None
+    except OSError as exc:
+        raise RuntimeError(
+            f"Failed to write benchmark evidence bundle to '{evidence_dir}': {exc}"
+        ) from exc
 
 
 def _score_dict(score) -> dict | None:

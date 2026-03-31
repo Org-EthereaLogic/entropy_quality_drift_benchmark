@@ -1,7 +1,7 @@
 [project]
 name = "entropy-quality-drift-benchmark"
 version = "0.2.1"
-description = "Benchmark proving Shannon Entropy-based methods are competitive against industry baselines for data quality validation and drift detection in Databricks medallion architectures"
+description = "Replayable benchmark for comparing silent data-failure controls in Databricks-style KPI and AI pipelines"
 readme = "README.md"
 license = { text = "MIT" }
 authors = [

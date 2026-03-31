@@ -61,6 +61,25 @@ class TestStructuralParity:
         assert len(deequ_range) > 0
         assert len(forge_range) > 0
 
+    def test_duplicate_primary_key_both_detect(self):
+        df = generate_clean_batch(n_rows=500, seed=42)
+        faulted = inject_quality_faults(
+            df,
+            FaultProfile(
+                duplicate_rate=0.05,
+            ),
+            seed=42,
+        )
+
+        deequ = DeequAdapter().validate_batch(faulted, TAXI_CONTRACT, "dupes")
+        forge = EntropyForge().validate_batch(faulted, TAXI_CONTRACT, "dupes")
+
+        deequ_dup = [c for c in deequ.checks if c.check_name == "uniqueness.trip_id"]
+        forge_dup = [c for c in forge.checks if c.check_name == "uniqueness.trip_id"]
+
+        assert len(deequ_dup) == 1 and deequ_dup[0].status == "FAIL"
+        assert len(forge_dup) == 1 and forge_dup[0].status == "FAIL"
+
 
 class TestEntropyAdvantage:
     """EntropyForge catches problems that Deequ cannot."""

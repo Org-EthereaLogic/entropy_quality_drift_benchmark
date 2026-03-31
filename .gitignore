@@ -10,7 +10,8 @@ __pycache__/
 dist/
 build/
 .DS_Store
-runs/
+runs/*
+!runs/README.md
 *.coverage
 coverage.xml
 .vscode/

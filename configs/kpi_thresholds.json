@@ -59,7 +59,7 @@
       "metric": "gradual_drift_sensitivity",
       "warn_threshold": 0.70,
       "comparison": "gte",
-      "description": "Gradual drift detection — entropy's key advantage over KS-test"
+      "description": "Gradual drift sensitivity target for the current entropy calibration"
     },
     "D-WARN-2": {
       "metric": "single_score_interpretability",

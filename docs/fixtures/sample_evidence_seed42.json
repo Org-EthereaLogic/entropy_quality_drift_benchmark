@@ -1,6 +1,7 @@
 {
+  "evidence_schema_version": 2,
   "run_id": "bench_42",
-  "timestamp": "2026-03-31T01:34:16.488012+00:00",
+  "timestamp": "2026-03-31T09:59:57.721680+00:00",
   "seed": 42,
   "n_rows": 1000,
   "verdict": "WARN",
@@ -8,14 +9,14 @@
     "baseline": {
       "adapter": "deequ_rules_baseline",
       "precision": 1.0,
-      "recall": 0.75,
-      "f1": 0.8571,
+      "recall": 0.8,
+      "f1": 0.8889,
       "false_positive_rate": 0.0,
       "sensitivity": 0.0,
       "distribution_detection_rate": 0.0,
       "gradual_drift_sensitivity": 0.0,
       "single_score_interpretability": 0.0,
-      "latency_ms": 0.39,
+      "latency_ms": 0.47,
       "batches_evaluated": 1
     },
     "challenger": {
@@ -28,7 +29,7 @@
       "distribution_detection_rate": 1.0,
       "gradual_drift_sensitivity": 0.0,
       "single_score_interpretability": 0.0,
-      "latency_ms": 4.97,
+      "latency_ms": 4.68,
       "batches_evaluated": 1
     }
   },
@@ -43,7 +44,7 @@
       "distribution_detection_rate": 0.0,
       "gradual_drift_sensitivity": 1.0,
       "single_score_interpretability": 0.0,
-      "latency_ms": 32.01,
+      "latency_ms": 26.43,
       "batches_evaluated": 2
     },
     "challenger": {
@@ -56,7 +57,7 @@
       "distribution_detection_rate": 0.0,
       "gradual_drift_sensitivity": 0.0,
       "single_score_interpretability": 1.0,
-      "latency_ms": 25.64,
+      "latency_ms": 24.74,
       "batches_evaluated": 2
     }
   },
@@ -76,7 +77,7 @@
       {
         "gate_id": "Q-GATE-2",
         "metric": "recall",
-        "baseline": 0.75,
+        "baseline": 0.8,
         "challenger": 1.0,
         "threshold": 0.9,
         "thresholds": {
@@ -85,31 +86,31 @@
         },
         "status": "PASS",
         "passed": true,
-        "details": "PASS: challenger=1.000, baseline=0.750, threshold=0.9, fail=0.8"
+        "details": "PASS: challenger=1.000, baseline=0.800, threshold=0.9, fail=0.8"
       },
       {
         "gate_id": "Q-GATE-3",
         "metric": "f1",
-        "baseline": 0.8571,
+        "baseline": 0.8889,
         "challenger": 1.0,
         "threshold": null,
         "thresholds": null,
         "status": "PASS",
         "passed": true,
-        "details": "PASS: challenger=1.000, baseline=0.857, pass=>=baseline, fail=<baseline-0.10"
+        "details": "PASS: challenger=1.000, baseline=0.889, pass=>=baseline, fail=<baseline-0.10"
       },
       {
         "gate_id": "Q-WARN-1",
         "metric": "latency_ratio",
         "baseline": 1.0,
-        "challenger": 12.7299,
+        "challenger": 9.9403,
         "threshold": 2.0,
         "thresholds": {
           "warn_threshold": 2.0
         },
         "status": "WARN",
         "passed": null,
-        "details": "WARN: ratio=12.73x (pass=2.0, fail=n/a)"
+        "details": "WARN: ratio=9.94x (pass=2.0, fail=n/a)"
       },
       {
         "gate_id": "Q-WARN-2",
@@ -155,7 +156,7 @@
         "gate_id": "D-GATE-3",
         "metric": "latency_ratio",
         "baseline": 1.0,
-        "challenger": 0.8012,
+        "challenger": 0.936,
         "threshold": 2.0,
         "thresholds": {
           "pass_threshold": 2.0,
@@ -163,7 +164,7 @@
         },
         "status": "PASS",
         "passed": true,
-        "details": "PASS: ratio=0.80x (pass=2.0, fail=3.0)"
+        "details": "PASS: ratio=0.94x (pass=2.0, fail=3.0)"
       },
       {
         "gate_id": "D-WARN-1",

@@ -1,21 +1,16 @@
 """
-EntropySentinel — Shannon Entropy gradient drift detection challenger.
+EntropySentinel — entropy + KL divergence drift detection challenger.
 
 Uses per-column entropy comparison between reference and current data
-to produce a single interpretable drift score per feature and a
-composite health score per batch.
+to produce a drift signal per feature and a composite health score per
+batch.
 
-Key advantages over KS-test baseline:
-1. Single interpretable score (0-1 health) vs. multiple p-values
-2. Catches gradual distribution shifts that KS-test needs large
-   samples to detect
-3. Computationally cheaper (O(n) value counts vs. O(n log n) sorting)
-4. Works equally well on numeric and categorical features
-5. Naturally handles high-cardinality columns where KS-test struggles
-
-The hypothesis: EntropySentinel matches KS-test sensitivity on sudden
-drift and EXCEEDS it on gradual drift, with lower false positive rate
-and a more interpretable output.
+This implementation is designed to compare against the KS-test baseline
+on sudden-drift sensitivity, gradual-drift sensitivity, false-positive
+rate, latency, and score interpretability. In the current benchmark
+profile it matches the baseline on sudden drift and exposes a single
+composite score, while gradual-drift sensitivity remains below the
+warning target.
 
 Author: Anthony Johnson | EthereaLogic LLC
 """
