@@ -20,7 +20,7 @@ You are the test automation specialist for this benchmark.
 ## Validation Sequence
 
 ```bash
-ruff check src tests
+ruff check src tests docs
 pytest tests/ -v --tb=short
 python -m entropy_quality_drift.runners.benchmark --seed 42 --rows 1000
 ```

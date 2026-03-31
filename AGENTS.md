@@ -94,4 +94,4 @@ When principles conflict, resolve them in this order:
 - `runs/` remains append-only; do not rewrite or delete benchmark evidence bundles.
 - `.claude/commands/` stores reusable Claude command surfaces.
 - `.claude/agents/` stores reusable agent briefs, including cleanup and examination specialists.
-- Repo-level completion requires `ruff check src tests` and `pytest tests/ -v --tb=short` to pass.
+- Repo-level completion requires `ruff check src tests docs` and `pytest tests/ -v --tb=short` to pass.

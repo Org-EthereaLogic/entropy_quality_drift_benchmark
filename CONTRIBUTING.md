@@ -25,7 +25,7 @@ pip install -e ".[dev]"
 
 ```bash
 pytest tests/ -v
-ruff check src tests
+ruff check src tests docs
 ```
 
 All tests must pass and ruff must report zero violations before a PR can be merged.

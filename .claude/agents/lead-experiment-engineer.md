@@ -22,6 +22,6 @@ You are the Lead Experiment Engineer for the entropy quality and drift benchmark
 3. Keep benchmark outputs deterministic for a given seed and config.
 4. Preserve append-only evidence behavior in `runs/`.
 5. Validate before claiming completion:
-   - `ruff check src tests`
+   - `ruff check src tests docs`
    - `pytest tests/ -v --tb=short`
    - `python -m entropy_quality_drift.runners.benchmark --seed 42 --rows 1000`

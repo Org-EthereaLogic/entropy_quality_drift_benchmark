@@ -20,7 +20,7 @@ Audit the repository for documentation and command drift after implementation wo
 
 ```bash
 git diff --check
-ruff check src tests
+ruff check src tests docs
 pytest tests/ -v --tb=short
 ```
 

@@ -20,7 +20,7 @@ Audit documentation drift and update the minimum necessary files.
 Run after documentation updates:
 
 ```bash
-ruff check src tests
+ruff check src tests docs
 pytest tests/ -v --tb=short
 ```
 
