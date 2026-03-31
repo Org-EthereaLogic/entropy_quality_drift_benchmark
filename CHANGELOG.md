@@ -9,6 +9,8 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-03-30
+
 ### Added
 
 - Problem-first README framing: leads with the business problem (silent distribution degradation and gradual drift) rather than benchmark mechanics.
@@ -18,6 +20,8 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - "How This Maps to Databricks" summary table in README linking to the full walkthrough.
 - Three publication-ready visualizations (`docs/generate_visuals.py`): track comparison, gate evaluation matrix, and verdict dashboard, matching the dark-theme palette from the medallion demo.
 - `[docs]` optional dependency for matplotlib-based image generation.
+- Public `run_benchmark_with_gates()` API for callers that need gate-level detail.
+- CI docs job that installs `.[docs]` and smoke-tests visual generation.
 
 ### Fixed
 
@@ -29,6 +33,7 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - Evidence bundles now include full `thresholds` map per gate for self-contained verdict reconstruction.
 - Corrected the README's verified local test count to match the current suite (`26 passed`).
 - Aligned `configs/kpi_thresholds.json` decision-rule wording with the evaluator's per-run verdict semantics.
+- Synced lint scope to `ruff check src tests docs` across CI, commands, agents, and all documentation.
 
 ### Changed
 
@@ -37,6 +42,7 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - Updated GitHub Actions automation to publish coverage, run Snyk code scans on `main`, and pin third-party actions to immutable commit SHAs.
 - Ported the prior experiment command and agent surfaces into `.claude/commands/` and `.claude/agents/`.
 - README restructured for client-readability: problem statement, architecture, verdict explanation, evidence sample, Databricks mapping, then technical detail.
+- Docs generation now uses public `run_benchmark_with_gates()` instead of private `_execute_benchmark()`.
 
 ## [0.1.0] — 2026-03-30
 

@@ -24,7 +24,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 
 from entropy_quality_drift.runners.benchmark import (  # noqa: E402
     BenchmarkConfig,
-    _execute_benchmark,
+    run_benchmark_with_gates,
 )
 
 OUTPUT_DIR = Path(__file__).parent / "images"
@@ -50,7 +50,7 @@ COLORS = {
 def _run_benchmark():
     """Execute the benchmark once and return (result, gate_result)."""
     cfg = BenchmarkConfig(seed=42, n_rows=1000, evidence_dir="/dev/null")
-    return _execute_benchmark(cfg)
+    return run_benchmark_with_gates(cfg)
 
 
 # ---------------------------------------------------------------------------

@@ -26,6 +26,7 @@ from entropy_quality_drift.challengers.entropy_forge import EntropyForge
 from entropy_quality_drift.challengers.entropy_sentinel import EntropySentinel
 from entropy_quality_drift.contracts import (
     BenchmarkResult,
+    GateEvaluationResult,
     TrackScore,
 )
 from entropy_quality_drift.datasets.synthetic import (
@@ -61,6 +62,19 @@ def run_benchmark(config: Optional[BenchmarkConfig] = None) -> BenchmarkResult:
     cfg = config or BenchmarkConfig()
     final, _ = _execute_benchmark(cfg)
     return final
+
+
+def run_benchmark_with_gates(
+    config: Optional[BenchmarkConfig] = None,
+) -> tuple[BenchmarkResult, GateEvaluationResult]:
+    """Execute the benchmark and return both the result and gate evaluation.
+
+    This is the public entry point for callers (such as docs generation)
+    that need access to gate-level detail without reaching into private
+    runner internals.
+    """
+    cfg = config or BenchmarkConfig()
+    return _execute_benchmark(cfg)
 
 
 def _execute_benchmark(cfg: BenchmarkConfig):
