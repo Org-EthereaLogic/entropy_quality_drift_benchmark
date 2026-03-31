@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
+import tempfile
 from datetime import datetime
 from pathlib import Path
 
@@ -82,8 +82,9 @@ def _load_visualization_inputs(
     live: bool,
 ) -> tuple[BenchmarkResult, GateEvaluationResult, str]:
     if live:
-        cfg = BenchmarkConfig(seed=42, n_rows=1000, evidence_dir=os.devnull)
-        result, gate_result = run_benchmark_with_gates(cfg)
+        with tempfile.TemporaryDirectory() as evidence_dir:
+            cfg = BenchmarkConfig(seed=42, n_rows=1000, evidence_dir=evidence_dir)
+            result, gate_result = run_benchmark_with_gates(cfg)
         return result, gate_result, "Live benchmark preview"
 
     bundle = json.loads(evidence_path.read_text(encoding="utf-8"))
@@ -161,13 +162,14 @@ def generate_track_comparison(result):
     fig, (ax_q, ax_d) = plt.subplots(1, 2, figsize=(16, 7), facecolor=COLORS["dark_bg"])
 
     fig.suptitle(
-        "Baseline vs Entropy Challenger: Head-to-Head Comparison",
+        "Quality Advantage, Drift Parity, and Remaining Gaps",
         fontsize=20, fontweight="bold", color=COLORS["text"], y=0.97,
     )
     fig.text(
         0.5, 0.91,
-        "Same deterministic dataset (seed=42, 1 000 rows).  "
-        "Higher is better for all quality metrics; lower is better for FPR.",
+        "Same deterministic benchmark run (seed=42, 1 000 rows).  "
+        "The entropy challengers close the quality recall gap, "
+        "match sudden-drift sensitivity, and still carry advisory calibration work.",
         ha="center", fontsize=11, color=COLORS["light_gray"], style="italic",
     )
 
@@ -272,13 +274,14 @@ def generate_gate_evaluation(gate_result):
     ax.axis("off")
 
     fig.suptitle(
-        "Gate Evaluation Matrix: 10 Frozen Gates (seed=42)",
+        "All Hard Requirements Passed; Two Advisory Thresholds Remain Open",
         fontsize=18, fontweight="bold", color=COLORS["text"], y=0.95,
     )
     fig.text(
         0.5, 0.90,
-        "Hard gates block on failure.  Warning gates surface "
-        "calibration opportunities without blocking.",
+        "10 frozen gates from the verified seed=42 run.  "
+        "Hard gates define minimum readiness; warning gates expose "
+        "calibration work without masking progress.",
         ha="center", fontsize=11, color=COLORS["light_gray"], style="italic",
     )
 
@@ -353,13 +356,13 @@ def generate_gate_evaluation(gate_result):
 
     verdict_explanation = {
         "PASS": "All hard gates and advisory gates cleared.",
-        "WARN": "All hard gates passed.  Warning thresholds surfaced improvement areas.",
+        "WARN": "All hard gates passed. Warning thresholds surfaced improvement areas.",
         "FAIL": "At least one hard gate breached.",
     }.get(verdict, "Evaluation incomplete.")
 
     fig.text(
         0.5, 0.04,
-        f"OVERALL VERDICT: {verdict} \u2014 {verdict_explanation}",
+        f"OVERALL VERDICT: {verdict} - {verdict_explanation}",
         ha="center", fontsize=13, fontweight="bold", color=verdict_color,
         bbox=dict(boxstyle="round,pad=0.5", facecolor=COLORS["dark_bg"],
                   edgecolor=verdict_color, linewidth=2),
@@ -394,7 +397,7 @@ def generate_verdict_dashboard(result, gate_result, verified_label: str):
     fig = plt.figure(figsize=(16, 9), facecolor=COLORS["dark_bg"])
 
     fig.suptitle(
-        "Entropy Quality & Drift Benchmark: Verdict Dashboard",
+        "Benchmark Verdict: Hard Requirements Met, Calibration Work Remains",
         fontsize=20, fontweight="bold", color=COLORS["text"], y=0.97,
     )
     fig.text(
@@ -436,8 +439,8 @@ def generate_verdict_dashboard(result, gate_result, verified_label: str):
     # Bottom caption
     fig.text(
         0.5, 0.05,
-        "Hard gates enforce correctness.  "
-        "Warning gates surface calibration opportunities without blocking the benchmark.",
+        "WARN is an honest governance outcome: hard requirements are met, "
+        "while quality latency and gradual-drift sensitivity still need improvement.",
         ha="center", fontsize=10, color=COLORS["light_gray"], style="italic",
     )
 

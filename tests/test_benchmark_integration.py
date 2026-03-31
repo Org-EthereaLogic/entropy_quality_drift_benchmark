@@ -50,6 +50,19 @@ class TestFullBenchmarkRun:
             f"Hard gates failed: {[(g.gate_id, g.details) for g in failed_gates]}"
         )
 
+    def test_default_seeded_metrics_match_public_contract(self, tmp_path):
+        """The seeded metrics quoted in the public docs must remain replayable."""
+        result = run_benchmark(BenchmarkConfig(seed=42, n_rows=1000, evidence_dir=str(tmp_path)))
+
+        assert result.verdict == "WARN"
+        assert result.quality_baseline.recall == 0.8
+        assert result.quality_baseline.f1 == 0.8889
+        assert result.quality_challenger.recall == 1.0
+        assert result.quality_challenger.f1 == 1.0
+        assert result.drift_baseline.sensitivity == 1.0
+        assert result.drift_challenger.sensitivity == 1.0
+        assert result.drift_challenger.gradual_drift_sensitivity == 0.0
+
     def test_gate_evaluation_produces_all_gates(self):
         """Gate evaluator should emit all 10 gates from kpi_thresholds.json."""
         result = run_benchmark(BenchmarkConfig(seed=42, n_rows=500))
@@ -170,6 +183,18 @@ class TestFullBenchmarkRun:
         assert _fail_threshold_met(1.21, "<=", 1.2)
         assert not _fail_threshold_met(1.19, "<=", 1.2)
 
+    def test_benchmark_errors_when_evidence_cannot_be_written(self, tmp_path):
+        """Benchmark execution must fail loudly when evidence writing fails."""
+        blocked_path = tmp_path / "not_a_directory"
+        blocked_path.write_text("occupied", encoding="utf-8")
+
+        try:
+            run_benchmark(BenchmarkConfig(seed=42, n_rows=250, evidence_dir=str(blocked_path)))
+        except RuntimeError as exc:
+            assert "Failed to write benchmark evidence bundle" in str(exc)
+        else:
+            raise AssertionError("Benchmark should fail when evidence cannot be written")
+
     def test_evidence_bundle_preserves_threshold_map(self, tmp_path):
         """Evidence should include both pass and fail thresholds when both exist."""
         config = BenchmarkConfig(seed=42, n_rows=250, evidence_dir=str(tmp_path))
@@ -178,6 +203,7 @@ class TestFullBenchmarkRun:
 
         bundle_path = next(tmp_path.glob("bench_42_*.json"))
         bundle = json.loads(bundle_path.read_text(encoding="utf-8"))
+        assert bundle["evidence_schema_version"] == 2
 
         q_gate_2 = next(g for g in bundle["gates"]["quality"] if g["gate_id"] == "Q-GATE-2")
         assert q_gate_2["threshold"] == 0.9

@@ -111,7 +111,10 @@ def _execute_benchmark(cfg: BenchmarkConfig):
     gradual_drifted_df = inject_drift(clean_df, gradual_profile, seed=cfg.seed + 2)
 
     # Build ground truth sets for scoring
-    quality_ground_truth = _build_quality_ground_truth(fault_profile)
+    quality_ground_truth = _build_quality_ground_truth(
+        fault_profile,
+        primary_key=TAXI_CONTRACT.primary_key,
+    )
     quality_distribution_ground_truth = set(fault_profile.constant_collapse_columns)
     drift_ground_truth = _build_drift_ground_truth(drift_profile)
     gradual_drift_ground_truth = _build_drift_ground_truth(gradual_profile)
@@ -188,7 +191,10 @@ def _execute_benchmark(cfg: BenchmarkConfig):
     return final, gate_result
 
 
-def _build_quality_ground_truth(profile: FaultProfile) -> set[str]:
+def _build_quality_ground_truth(
+    profile: FaultProfile,
+    primary_key: str | None = None,
+) -> set[str]:
     """Build the set of column names where quality faults were injected.
 
     A column in this set SHOULD produce at least one FAIL check from
@@ -203,6 +209,8 @@ def _build_quality_ground_truth(profile: FaultProfile) -> set[str]:
         faulted_columns.add(col)
     for col in profile.schema_drop_columns:
         faulted_columns.add(col)
+    if profile.duplicate_rate > 0 and primary_key is not None:
+        faulted_columns.add(primary_key)
     return faulted_columns
 
 

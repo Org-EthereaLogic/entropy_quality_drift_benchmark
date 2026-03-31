@@ -93,6 +93,7 @@ class EntropyForge(BaseQualityAdapter):
 
         # --- Structural checks (same as Deequ for fair comparison) ---
         checks.extend(self._check_schema(batch, contract))
+        checks.extend(self._check_primary_key_uniqueness(batch, contract))
         checks.extend(self._check_volume(batch, contract))
         checks.extend(self._check_null_rates(batch, contract))
         checks.extend(self._check_ranges(batch, contract))
@@ -193,6 +194,26 @@ class EntropyForge(BaseQualityAdapter):
                 )
             )
         return results
+
+    def _check_primary_key_uniqueness(
+        self, batch: pd.DataFrame, contract: SourceContract
+    ) -> list[QualityCheckResult]:
+        if contract.primary_key is None or contract.primary_key not in batch.columns:
+            return []
+
+        duplicate_rows = int(batch.duplicated(subset=[contract.primary_key], keep=False).sum())
+        duplicate_rate = duplicate_rows / len(batch) if len(batch) > 0 else 0.0
+        return [
+            QualityCheckResult(
+                check_name=f"uniqueness.{contract.primary_key}",
+                status="PASS" if duplicate_rows == 0 else "FAIL",
+                observed_value=duplicate_rate,
+                threshold=0.0,
+                details=(
+                    f"{duplicate_rows} rows share duplicated primary key '{contract.primary_key}'"
+                ),
+            )
+        ]
 
     # --- Entropy-based checks (the differentiator) ---
 
