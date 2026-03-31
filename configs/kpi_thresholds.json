@@ -1,0 +1,82 @@
+{
+  "experiment_id": "ENTROPY_QUALITY_DRIFT_BENCHMARK",
+  "version": "1.0",
+  "quality_track": {
+    "Q-GATE-1": {
+      "metric": "precision",
+      "pass_condition": ">=baseline",
+      "fail_condition": "<baseline-0.10",
+      "description": "Entropy challenger precision must match or exceed Deequ baseline"
+    },
+    "Q-GATE-2": {
+      "metric": "recall",
+      "pass_threshold": 0.90,
+      "fail_threshold": 0.80,
+      "comparison": "gte",
+      "description": "Entropy challenger must detect >= 90% of injected violations"
+    },
+    "Q-GATE-3": {
+      "metric": "f1",
+      "pass_condition": ">=baseline",
+      "fail_condition": "<baseline-0.10",
+      "description": "Balanced quality score must match or exceed baseline"
+    },
+    "Q-WARN-1": {
+      "metric": "latency_ratio",
+      "warn_threshold": 2.0,
+      "comparison": "lte",
+      "description": "Entropy latency should not exceed 2x baseline"
+    },
+    "Q-WARN-2": {
+      "metric": "distribution_detection_rate",
+      "warn_threshold": 0.85,
+      "comparison": "gte",
+      "description": "Entropy must detect >= 85% of distribution anomalies that rules miss"
+    }
+  },
+  "drift_track": {
+    "D-GATE-1": {
+      "metric": "false_positive_rate",
+      "pass_condition": "<=baseline",
+      "fail_condition": ">baseline+0.05",
+      "description": "Entropy FPR must not exceed KS-test baseline"
+    },
+    "D-GATE-2": {
+      "metric": "sensitivity",
+      "pass_threshold": 0.85,
+      "fail_threshold": 0.70,
+      "comparison": "gte",
+      "description": "Entropy must detect >= 85% of injected drift"
+    },
+    "D-GATE-3": {
+      "metric": "latency_ratio",
+      "pass_threshold": 2.0,
+      "fail_threshold": 3.0,
+      "comparison": "lte",
+      "description": "Detection delay within 2x baseline"
+    },
+    "D-WARN-1": {
+      "metric": "gradual_drift_sensitivity",
+      "warn_threshold": 0.70,
+      "comparison": "gte",
+      "description": "Gradual drift detection — entropy's key advantage over KS-test"
+    },
+    "D-WARN-2": {
+      "metric": "single_score_interpretability",
+      "warn_threshold": 1.0,
+      "comparison": "eq",
+      "description": "Entropy produces a single interpretable health score (KS-test does not)"
+    }
+  },
+  "guardrails": {
+    "canonical_seeds": [42, 7, 123, 2024, 31415],
+    "deterministic_faults": true,
+    "baseline_runs_first": true,
+    "append_only_evidence": true
+  },
+  "decision_rule": {
+    "pass": "All FAIL gates pass and no WARN gate breaches across two consecutive runs.",
+    "warn": "All FAIL gates pass but one or more WARN gates breach.",
+    "fail": "Any FAIL gate breach."
+  }
+}
