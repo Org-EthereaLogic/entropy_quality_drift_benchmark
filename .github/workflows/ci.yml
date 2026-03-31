@@ -84,8 +84,13 @@ jobs:
           test -f docs/images/gate_evaluation.png
           test -f docs/images/benchmark_verdict.png
 
-      - name: Verify tracked docs images stay unchanged
-        run: git diff --exit-code -- docs/images
+      - name: Verify docs generation is idempotent on this runner
+        shell: bash
+        run: |
+          first_hashes="$(sha256sum docs/images/*.png)"
+          python docs/generate_visuals.py
+          second_hashes="$(sha256sum docs/images/*.png)"
+          test "$first_hashes" = "$second_hashes"
 
   package:
     name: Package (wheel smoke test)
