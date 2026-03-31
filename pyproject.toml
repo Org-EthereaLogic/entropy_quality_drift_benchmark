@@ -1,0 +1,37 @@
+[project]
+name = "entropy-quality-drift-benchmark"
+version = "0.1.0"
+description = "Benchmark proving Shannon Entropy-based methods are competitive against industry baselines for data quality validation and drift detection in Databricks medallion architectures"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [
+    { name = "Anthony Johnson", email = "anthony@etherealogic.com" },
+]
+requires-python = ">=3.10"
+dependencies = [
+    "pandas>=2.0",
+    "numpy>=1.24",
+    "scipy>=1.11",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "ruff>=0.4.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+src = ["src"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

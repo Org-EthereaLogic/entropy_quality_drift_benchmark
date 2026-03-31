@@ -1,0 +1,21 @@
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+.env
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+build/
+.DS_Store
+runs/
+*.coverage
+coverage.xml
+.vscode/
+.idea/
+.mypy_cache/
+
+
+#Ignore insiders AI rules
+.github/instructions/codacy.instructions.md
